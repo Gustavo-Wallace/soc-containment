@@ -1,3 +1,19 @@
-# Godot 4+ specific ignores
+# Godot generated files
 .godot/
-/android/
+.import/
+
+# Local exports and builds
+build/
+exports/
+*.pck
+
+# Local runtime data and logs
+logs/
+user-data/
+*.log
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
