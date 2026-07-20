@@ -2,6 +2,7 @@ class_name AttackerDebugPanel
 extends Panel
 
 const AttackerStateType = preload("res://scripts/attacker_state.gd")
+const AdaptiveChainType = preload("res://scripts/adaptive_chain.gd")
 
 var attacker: AttackerStateType
 var output: Label
@@ -25,4 +26,6 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	if visible and attacker != null:
-		output.text = "ATTACKER DEBUG\nState: %s\nObjective: %s\nPosition: %s\nProcess active: %s\nCredential: %s (%s)\nSession: %s\nPersistence: %s\nCurrent: %s\nNext: %s\n\n%s" % [attacker.operation_state, attacker.objective, attacker.position, str(attacker.can_execute("external_communication")), "finance.analyst", "invalid" if attacker.identity_context.credentials_reset else "valid", attacker.identity_context.suspicious_session_state, attacker.recovery_context.persistence_state, attacker.current_action, attacker.next_action, "\n".join(attacker.chain_log)]
+		var adaptive: AdaptiveChainType = get_tree().get_first_node_in_group("adaptive_chain") as AdaptiveChainType
+		var adaptation_text := "not initialized" if adaptive == null else "%s • staged=%s • transfer=%s" % [adaptive.phase, str(adaptive.staged_data), str(adaptive.transfer_active)]
+		output.text = "ATTACKER DEBUG\nState: %s\nObjective: %s\nPosition: %s\nProcess active: %s\nCredential: %s (%s)\nSession: %s\nPersistence: %s\nAdaptation: %s\nCurrent: %s\nNext: %s\n\n%s" % [attacker.operation_state, attacker.objective, attacker.position, str(attacker.can_execute("external_communication")), "finance.analyst", "invalid" if attacker.identity_context.credentials_reset else "valid", attacker.identity_context.suspicious_session_state, attacker.recovery_context.persistence_state, adaptation_text, attacker.current_action, attacker.next_action, "\n".join(attacker.chain_log)]

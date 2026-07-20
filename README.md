@@ -6,6 +6,8 @@ Após a contenção, a recuperação permite validar e remover uma persistência
 
 A simulação também mantém uma cadeia ofensiva determinística interna, inspecionável apenas pelo painel de desenvolvimento ativado com F3.
 
+Quando a rota de credencial é bloqueada, o atacante pode tentar uma única cadeia alternativa de coleta local e transferência externa, ainda sujeita à contenção do processo ou da rede.
+
 SOC: Containment é um jogo de estratégia, investigação e gerenciamento de incidentes de segurança cibernética. A rede corporativa é o campo principal: o jogador observa sua estrutura, entende a função de cada ativo e toma decisões para preservar a operação.
 
 ## Como funciona

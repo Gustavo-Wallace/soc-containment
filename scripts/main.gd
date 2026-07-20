@@ -33,6 +33,8 @@ const RecoveryContextType = preload("res://scripts/recovery_context.gd")
 const ATTACKER_STATE_SCRIPT := preload("res://scripts/attacker_state.gd")
 const AttackerStateType = preload("res://scripts/attacker_state.gd")
 const AttackerDebugPanelType = preload("res://scripts/attacker_debug_panel.gd")
+const ADAPTIVE_CHAIN_SCRIPT := preload("res://scripts/adaptive_chain.gd")
+const AdaptiveChainType = preload("res://scripts/adaptive_chain.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -62,6 +64,7 @@ var identity_context: IdentityContextType
 var recovery_context: RecoveryContextType
 var attacker_state: AttackerStateType
 var attacker_debug_panel: AttackerDebugPanelType
+var adaptive_chain: AdaptiveChainType
 
 func _ready() -> void:
 	_create_simulation_systems()
@@ -124,6 +127,7 @@ func _create_simulation_systems() -> void:
 	identity_context = IDENTITY_CONTEXT_SCRIPT.new()
 	recovery_context = RECOVERY_CONTEXT_SCRIPT.new()
 	attacker_state = ATTACKER_STATE_SCRIPT.new()
+	adaptive_chain = ADAPTIVE_CHAIN_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
@@ -137,10 +141,16 @@ func _create_simulation_systems() -> void:
 	systems.add_child(identity_context)
 	systems.add_child(recovery_context)
 	systems.add_child(attacker_state)
+	systems.add_child(adaptive_chain)
 	alert_system.configure(event_log)
 	identity_context.configure(clock, event_log)
 	recovery_context.configure(clock, event_log, process_store)
 	attacker_state.configure(clock, process_store, identity_context, recovery_context)
+	adaptive_chain.configure(clock, event_log, process_store, identity_context, recovery_context, attacker_state)
+	adaptive_chain.local_discovery_completed.connect(_on_local_discovery)
+	adaptive_chain.local_staging_completed.connect(_on_local_staging)
+	adaptive_chain.local_transfer_started.connect(_on_local_transfer_started)
+	adaptive_chain.local_transfer_completed.connect(_on_local_transfer_completed)
 	incident_sequence.configure(clock, event_log, process_store, identity_context, attacker_state)
 	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store, support_evidence_store, identity_context, recovery_context)
 	recovery_context.process_restart_attempted.connect(_on_persistence_restart)
@@ -199,12 +209,14 @@ func _open_alert(alert: AlertDataType) -> void:
 	status_dot.color = VisualStyle.SELECTION
 
 func _on_process_terminated(_device_id: String) -> void:
+	adaptive_chain.cancel_network_activity()
 	network_view.set_unusual_route(false)
 	recovery_context.mark_contained(false)
 	status_label.text = "ACTIVITY SUPPRESSED"
 	status_dot.color = VisualStyle.AMBER
 
 func _on_device_isolated(device_id: String) -> void:
+	adaptive_chain.cancel_network_activity()
 	network_view.isolate_device(device_id)
 	business_flow.set_isolated(true)
 	recovery_context.mark_contained(true)
@@ -273,6 +285,21 @@ func _on_persistence_restart(online: bool) -> void:
 		incident_state.reopen()
 	else:
 		alert_system.update_current("Contained", 0.64, "update_bridge.exe restarted locally; isolation is blocking its external communication.")
+
+func _on_local_discovery() -> void:
+	evidence_store.add(EvidenceDataType.new({"id": "unusual_local_document_access", "title": "Unusual local document access", "source": "Endpoint Monitor", "timestamp": clock.elapsed_seconds, "device_id": "workstation_a", "confidence": "High", "summary": "update_bridge.exe accessed several finance documents in a short interval after the credential path was blocked.", "facts": PackedStringArray(["Local finance documents accessed", "Activity followed credential reset", "No transfer confirmed at this stage"])}))
+	alert_system.update_current("Open", 0.79, "After the credential path was blocked, Workstation A began accessing local finance documents at an unusual rate.")
+
+func _on_local_staging() -> void:
+	evidence_store.add(EvidenceDataType.new({"id": "local_data_staging", "title": "Local data staging activity", "source": "Endpoint Monitor", "timestamp": clock.elapsed_seconds, "device_id": "workstation_a", "confidence": "High", "summary": "Local finance data was prepared for external transfer.", "facts": PackedStringArray(["Documents grouped for transfer", "Process remains active", "External path remains available"])}))
+	alert_system.update_current("Open", 0.86, "Local finance data was prepared for external transfer.")
+
+func _on_local_transfer_started() -> void:
+	network_view.set_unusual_route(true)
+	alert_system.update_current("Open", 0.90, "Abnormal outbound volume from Workstation A indicates a staged local-data transfer attempt.")
+
+func _on_local_transfer_completed() -> void:
+	incident_state.mark_failed()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("toggle_attacker_debug"):
