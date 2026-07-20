@@ -18,6 +18,9 @@ const VisualStyle = preload("res://scripts/visuals.gd")
 const RESPONSE_CONTROLLER_SCRIPT := preload("res://scripts/response_controller.gd")
 const ResponseControllerType = preload("res://scripts/response_controller.gd")
 const ResponseActionType = preload("res://scripts/response_action.gd")
+const INCIDENT_STATE_SCRIPT := preload("res://scripts/incident_state.gd")
+const IncidentStateType = preload("res://scripts/incident_state.gd")
+const ReportOverlayType = preload("res://scripts/report_overlay.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -30,6 +33,7 @@ const ResponseActionType = preload("res://scripts/response_action.gd")
 @onready var speed_2_button: Button = $TopBar/Speed2Button
 @onready var alert_tray: AlertTrayType = $Content/AlertTray
 @onready var impact_label: Label = $TopBar/ImpactLabel
+@onready var report_overlay: ReportOverlayType = $ReportOverlay
 
 var clock: SimulationClockType
 var event_log: EventLogType
@@ -37,6 +41,7 @@ var process_store: ProcessStoreType
 var alert_system: AlertSystemType
 var incident_sequence: IncidentSequenceType
 var response_controller: ResponseControllerType
+var incident_state: IncidentStateType
 
 func _ready() -> void:
 	_create_simulation_systems()
@@ -56,11 +61,15 @@ func _ready() -> void:
 	incident_sequence.observation_changed.connect(network_view.set_observed_state)
 	incident_sequence.unusual_route_changed.connect(network_view.set_unusual_route)
 	incident_sequence.suspicious_access_attempt.connect(_on_suspicious_access_attempt)
+	incident_sequence.file_server_session_established.connect(_on_file_server_session)
+	incident_sequence.abnormal_transfer_started.connect(_on_abnormal_transfer)
 	response_controller.action_completed.connect(_on_action_completed)
 	response_controller.process_terminated.connect(_on_process_terminated)
 	response_controller.device_isolated.connect(_on_device_isolated)
 	response_controller.impact_changed.connect(_on_impact_changed)
-	details_panel.configure(event_log, process_store, response_controller)
+	incident_state.report_requested.connect(_on_report_requested)
+	report_overlay.restart_requested.connect(_restart_incident)
+	details_panel.configure(event_log, process_store, response_controller, incident_state)
 	incident_sequence.start()
 	_update_time_mode()
 
@@ -74,15 +83,18 @@ func _create_simulation_systems() -> void:
 	alert_system = ALERT_SYSTEM_SCRIPT.new()
 	incident_sequence = INCIDENT_SEQUENCE_SCRIPT.new()
 	response_controller = RESPONSE_CONTROLLER_SCRIPT.new()
+	incident_state = INCIDENT_STATE_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
 	systems.add_child(alert_system)
 	systems.add_child(incident_sequence)
 	systems.add_child(response_controller)
+	systems.add_child(incident_state)
 	alert_system.configure(event_log)
 	incident_sequence.configure(clock, event_log, process_store)
 	response_controller.configure(clock, event_log, process_store, alert_system)
+	incident_state.configure(clock, event_log)
 
 func _update_time(_time_value: float) -> void:
 	time_label.text = clock.formatted_time()
@@ -123,6 +135,7 @@ func _on_alert_created(alert: AlertDataType) -> void:
 	status_label.text = "ANOMALY DETECTED"
 	status_dot.color = VisualStyle.AMBER
 	_update_speed_buttons(clock.speed_multiplier)
+	incident_state.begin_investigating()
 
 func _open_alert(alert: AlertDataType) -> void:
 	network_view.focus_and_select(alert.related_device_id)
@@ -139,8 +152,9 @@ func _on_device_isolated(device_id: String) -> void:
 	status_label.text = "DEVICE CONTAINED"
 	status_dot.color = VisualStyle.MUTED_TEXT
 
-func _on_action_completed(_action: ResponseActionType) -> void:
+func _on_action_completed(action: ResponseActionType) -> void:
 	incident_sequence.prevent_escalation()
+	incident_state.register_containment(action, response_controller.operational_impact)
 
 func _on_impact_changed(impact: String) -> void:
 	impact_label.text = "IMPACT: " + impact.to_upper()
@@ -151,3 +165,23 @@ func _on_suspicious_access_attempt(started_at: float) -> void:
 	alert_system.update_current("Open", 0.72, "Suspicious access attempt toward File Server observed.")
 	status_label.text = "SUSPICIOUS ACCESS ATTEMPT"
 	status_dot.color = VisualStyle.AMBER
+	incident_state.mark_escalated()
+
+func _on_file_server_session(started_at: float) -> void:
+	network_view.start_escalation_route(started_at)
+	alert_system.update_current("Open", 0.78, "Unauthorized File Server session observed.")
+	status_label.text = "FILE SERVER SESSION OBSERVED"
+	status_dot.color = VisualStyle.AMBER
+	incident_state.mark_session_established()
+
+func _on_abnormal_transfer(_started_at: float) -> void:
+	status_label.text = "ABNORMAL TRANSFER DETECTED"
+	status_dot.color = VisualStyle.AMBER
+	incident_state.mark_failed()
+
+func _on_report_requested(outcome: String) -> void:
+	clock.pause()
+	report_overlay.show_report(outcome, event_log, incident_state)
+
+func _restart_incident() -> void:
+	get_tree().reload_current_scene()

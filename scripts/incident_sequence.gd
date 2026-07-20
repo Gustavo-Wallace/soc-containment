@@ -10,6 +10,8 @@ const SimulationEventType = preload("res://scripts/simulation_event.gd")
 signal observation_changed(device_id: String, observed_state: String)
 signal unusual_route_changed(is_active: bool)
 signal suspicious_access_attempt(timestamp: float)
+signal file_server_session_established(timestamp: float)
+signal abnormal_transfer_started(timestamp: float)
 
 var clock: SimulationClockType
 var event_log: EventLogType
@@ -17,6 +19,8 @@ var process_store: ProcessStoreType
 var emitted_ids: Dictionary = {}
 var alert_started_at := -1.0
 var escalation_prevented := false
+var escalation_started_at := -1.0
+var session_started_at := -1.0
 
 func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType) -> void:
 	clock = clock_value
@@ -34,6 +38,10 @@ func _on_time_changed(time_value: float) -> void:
 	_emit_once("first_alert", 11.5, time_value, _record_alert)
 	if alert_started_at >= 0.0 and not escalation_prevented:
 		_emit_once("file_server_attempt", alert_started_at + 15.0, time_value, _record_file_server_attempt)
+	if escalation_started_at >= 0.0 and not escalation_prevented:
+		_emit_once("file_server_session", escalation_started_at + 12.0, time_value, _record_file_server_session)
+	if session_started_at >= 0.0 and not escalation_prevented:
+		_emit_once("abnormal_transfer", session_started_at + 8.0, time_value, _record_abnormal_transfer)
 
 func _emit_once(event_id: String, threshold: float, time_value: float, action: Callable) -> void:
 	if time_value < threshold or emitted_ids.has(event_id):
@@ -66,6 +74,17 @@ func _record_file_server_attempt() -> void:
 	_record("file_server_attempt_fs", "suspicious_access_attempt", "Workstation A", "File Server", "Unusual authentication attempt from Workstation A was observed at the server boundary.", 0.72, "Attention", "file_server")
 	_record("alert_updated_escalation", "alert_updated", "Network Sensor", "Workstation A", "Alert confidence increased after the suspicious access attempt.", 0.72, "Attention", "workstation_a")
 	suspicious_access_attempt.emit(clock.elapsed_seconds)
+	escalation_started_at = clock.elapsed_seconds
+
+func _record_file_server_session() -> void:
+	_record("file_server_session", "unauthorized_session_established", "Workstation A", "File Server", "An unauthorized session was established at File Server.", 0.78, "Attention", "file_server")
+	observation_changed.emit("file_server", "Anomaly observed")
+	file_server_session_established.emit(clock.elapsed_seconds)
+	session_started_at = clock.elapsed_seconds
+
+func _record_abnormal_transfer() -> void:
+	_record("abnormal_transfer", "abnormal_file_transfer", "File Server", "External", "An abnormal file transfer began from File Server.", 0.86, "Attention", "file_server")
+	abnormal_transfer_started.emit(clock.elapsed_seconds)
 
 func _record(id: String, event_type: String, source: String, target: String, summary: String, confidence: float, severity: String, device_id: String, extra: Dictionary = {}) -> void:
 	event_log.record(SimulationEventType.new({"id": id, "timestamp": clock.elapsed_seconds, "event_type": event_type, "source": source, "target": target, "summary": summary, "additional_data": extra, "visible_to_player": true, "confidence": confidence, "visual_severity": severity, "related_device_id": device_id}))
