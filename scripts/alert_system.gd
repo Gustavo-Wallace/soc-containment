@@ -25,16 +25,38 @@ func _on_event_recorded(event: SimulationEventType) -> void:
 		"confidence": event.confidence,
 		"severity": event.visual_severity,
 		"state": "Open",
-		"related_device_id": event.related_device_id
+		"related_device_id": event.related_device_id,
+		"priority": event.additional_data.get("priority", event.visual_severity),
+		"context_kind": event.additional_data.get("context_kind", "incident")
 	})
 	alerts.append(alert)
 	alert_created.emit(alert)
 
 func update_current(state: String, confidence: float, summary: String) -> void:
-	if alerts.is_empty():
+	var alert := primary_alert()
+	if alert == null:
 		return
-	var alert: AlertDataType = alerts[0]
 	alert.state = state
 	alert.confidence = confidence
 	alert.summary = summary
+	alert_updated.emit(alert)
+
+func primary_alert() -> AlertDataType:
+	for alert: AlertDataType in alerts:
+		if alert.context_kind == "incident":
+			return alert
+	return null
+
+func alert_for_device(device_id: String) -> AlertDataType:
+	for alert: AlertDataType in alerts:
+		if alert.related_device_id == device_id:
+			return alert
+	return null
+
+func close_as_benign(device_id: String) -> void:
+	var alert := alert_for_device(device_id)
+	if alert == null:
+		return
+	alert.state = "Benign"
+	alert.triage_status = "Verified Benign" if alert.reviewed else "Unsupported Closure"
 	alert_updated.emit(alert)

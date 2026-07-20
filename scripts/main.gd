@@ -49,6 +49,7 @@ var incident_sequence: IncidentSequenceType
 var response_controller: ResponseControllerType
 var incident_state: IncidentStateType
 var evidence_store: EvidenceStoreType
+var support_evidence_store: EvidenceStoreType
 var business_flow: BusinessFlowType
 
 func _ready() -> void:
@@ -71,6 +72,7 @@ func _ready() -> void:
 	incident_sequence.suspicious_access_attempt.connect(_on_suspicious_access_attempt)
 	incident_sequence.file_server_session_established.connect(_on_file_server_session)
 	incident_sequence.abnormal_transfer_started.connect(_on_abnormal_transfer)
+	incident_sequence.remote_support_started.connect(network_view.start_remote_support)
 	business_flow.sync_started.connect(network_view.start_business_sync)
 	business_flow.sync_missed.connect(_on_business_sync_missed)
 	business_flow.flow_changed.connect(_update_business_status)
@@ -78,6 +80,7 @@ func _ready() -> void:
 	response_controller.action_completed.connect(_on_action_completed)
 	response_controller.process_terminated.connect(_on_process_terminated)
 	response_controller.device_isolated.connect(_on_device_isolated)
+	response_controller.support_alert_closed.connect(_on_support_alert_closed)
 	response_controller.impact_changed.connect(_on_impact_changed)
 	incident_state.report_requested.connect(_on_report_requested)
 	report_overlay.restart_requested.connect(_restart_incident)
@@ -97,6 +100,7 @@ func _create_simulation_systems() -> void:
 	response_controller = RESPONSE_CONTROLLER_SCRIPT.new()
 	incident_state = INCIDENT_STATE_SCRIPT.new()
 	evidence_store = EVIDENCE_STORE_SCRIPT.new()
+	support_evidence_store = EVIDENCE_STORE_SCRIPT.new()
 	business_flow = BUSINESS_FLOW_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
@@ -106,10 +110,11 @@ func _create_simulation_systems() -> void:
 	systems.add_child(response_controller)
 	systems.add_child(incident_state)
 	systems.add_child(evidence_store)
+	systems.add_child(support_evidence_store)
 	systems.add_child(business_flow)
 	alert_system.configure(event_log)
 	incident_sequence.configure(clock, event_log, process_store)
-	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store)
+	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store, support_evidence_store)
 	incident_state.configure(clock, event_log)
 	business_flow.configure(clock, event_log)
 
@@ -150,6 +155,8 @@ func _time_button_style(active: bool, hovered: bool) -> StyleBoxFlat:
 
 func _on_alert_created(alert: AlertDataType) -> void:
 	alert_tray.show_alert(alert)
+	if alert.context_kind != "incident":
+		return
 	status_label.text = "ANOMALY DETECTED"
 	status_dot.color = VisualStyle.AMBER
 	_update_speed_buttons(clock.speed_multiplier)
@@ -157,6 +164,8 @@ func _on_alert_created(alert: AlertDataType) -> void:
 
 func _open_alert(alert: AlertDataType) -> void:
 	network_view.focus_and_select(alert.related_device_id)
+	if alert.context_kind != "incident":
+		return
 	status_label.text = "INVESTIGATION ACTIVE"
 	status_dot.color = VisualStyle.SELECTION
 
@@ -172,6 +181,8 @@ func _on_device_isolated(device_id: String) -> void:
 	status_dot.color = VisualStyle.MUTED_TEXT
 
 func _on_action_completed(action: ResponseActionType) -> void:
+	if action.target_device_id != "workstation_a":
+		return
 	incident_sequence.prevent_escalation()
 	incident_state.register_containment(action, response_controller.operational_impact)
 
@@ -203,7 +214,10 @@ func _on_abnormal_transfer(_started_at: float) -> void:
 
 func _on_report_requested(outcome: String) -> void:
 	clock.pause()
-	report_overlay.show_report(outcome, event_log, incident_state, evidence_store, business_flow)
+	report_overlay.show_report(outcome, event_log, incident_state, evidence_store, business_flow, alert_system)
+
+func _on_support_alert_closed(device_id: String) -> void:
+	network_view.set_observed_state(device_id, "Normal")
 
 func _restart_incident() -> void:
 	get_tree().reload_current_scene()

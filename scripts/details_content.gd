@@ -210,9 +210,10 @@ func _draw_response_actions(font: Font, y: float) -> void:
 func _draw_case_evidence(font: Font, y: float) -> void:
 	draw_line(Vector2(22, y - 8), Vector2(size.x - 22, y - 8), Color(VisualStyle.CONNECTION, 0.5), 1.0)
 	draw_string(font, Vector2(22, y + 4), "CASE EVIDENCE", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, VisualStyle.MUTED_TEXT)
-	var store = response_controller.evidence_store
+	var store = response_controller.evidence_store if current.id == "workstation_a" else response_controller.support_evidence_store
 	var confidence := store.hypothesis_confidence()
-	draw_string(font, Vector2(22, y + 22), "Hypothesis (%s): Workstation A may be running unauthorized software communicating externally." % confidence, HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 9, VisualStyle.TEXT)
+	var heading := "Hypothesis (%s): Workstation A may be running unauthorized software communicating externally." % confidence if current.id == "workstation_a" else "Context verification (%s): Workstation B remote support session." % confidence
+	draw_string(font, Vector2(22, y + 22), heading, HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 9, VisualStyle.TEXT)
 	var evidence_y := y + 40.0
 	for item in store.evidence:
 		draw_string(font, Vector2(22, evidence_y), "• " + item.title + " — " + item.confidence, HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 10, VisualStyle.AMBER)
@@ -222,7 +223,7 @@ func _draw_confirmation(font: Font, y: float) -> void:
 	draw_rect(Rect2(18, y - 14, size.x - 36, 143), Color(VisualStyle.SURFACE_ALT, 0.98), true)
 	draw_rect(Rect2(18, y - 14, size.x - 36, 143), VisualStyle.AMBER, false, 1.2)
 	draw_string(font, Vector2(25, y + 4), "CONFIRM %s" % pending_action.title.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, size.x - 50, 11, VisualStyle.AMBER)
-	draw_string(font, Vector2(25, y + 25), "Target: Workstation A • %ss • %s impact" % [int(pending_action.duration_seconds), pending_action.impact], HORIZONTAL_ALIGNMENT_LEFT, size.x - 50, 10, VisualStyle.TEXT)
+	draw_string(font, Vector2(25, y + 25), "Target: %s • %ss • %s impact" % ["Workstation A" if pending_action.target_device_id == "workstation_a" else "Workstation B", int(pending_action.duration_seconds), pending_action.impact], HORIZONTAL_ALIGNMENT_LEFT, size.x - 50, 10, VisualStyle.TEXT)
 	draw_multiline_string(font, Vector2(25, y + 32), pending_action.consequence, HORIZONTAL_ALIGNMENT_LEFT, size.x - 50, 10, 2, VisualStyle.TEXT)
 	draw_multiline_string(font, Vector2(25, y + 63), "Limitation: " + pending_action.limitation, HORIZONTAL_ALIGNMENT_LEFT, size.x - 50, 9, 2, VisualStyle.MUTED_TEXT)
 	confirm_rect = Rect2(25, y + 103, 116, 24)
@@ -239,4 +240,4 @@ func _format_time(value: float) -> String:
 	return "%02d:%02d" % [int(float(seconds) / 60.0), seconds % 60]
 
 func _update_content_height() -> void:
-	custom_minimum_size.y = 1100.0 if selected_process != null and selected_process.id == "update_bridge" else (760.0 if selected_process != null else 662.0)
+	custom_minimum_size.y = 1100.0 if selected_process != null and selected_process.id == "update_bridge" else (960.0 if selected_process != null and selected_process.id == "relay_support" else (760.0 if selected_process != null else 662.0))

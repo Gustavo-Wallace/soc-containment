@@ -16,6 +16,7 @@ signal action_completed(action: ResponseActionType)
 signal impact_changed(impact: String)
 signal process_terminated(device_id: String)
 signal device_isolated(device_id: String)
+signal support_alert_closed(device_id: String)
 
 var clock: SimulationClockType
 var event_log: EventLogType
@@ -25,17 +26,28 @@ var active_action: ResponseActionType
 var action_started_at := 0.0
 var operational_impact := "None"
 var evidence_store: EvidenceStoreType
+var support_evidence_store: EvidenceStoreType
 
-func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, alerts_value: AlertSystemType, evidence_value: EvidenceStoreType) -> void:
+func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, alerts_value: AlertSystemType, evidence_value: EvidenceStoreType, support_evidence_value: EvidenceStoreType) -> void:
 	clock = clock_value
 	event_log = log_value
 	process_store = store_value
 	alert_system = alerts_value
 	evidence_store = evidence_value
+	support_evidence_store = support_evidence_value
 	clock.time_changed.connect(_on_time_changed)
 
 func actions_for_process(process_id: String, device_id: String, observed_state: String) -> Array[ResponseActionType]:
 	var actions: Array[ResponseActionType] = []
+	if process_id == "relay_support" and device_id == "workstation_b":
+		if not support_evidence_store.has("approved_remote_support"):
+			actions.append(ResponseActionType.new({"id": "review_session_context", "title": "Review Session Context", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 3.0, "impact": "None", "benefit": "Verifies the publisher, approved source, maintenance window and support ticket.", "limitation": "The alert remains open until triage is chosen.", "consequence": "No operational impact; the primary incident keeps progressing."}))
+		var support_alert := alert_system.alert_for_device(device_id)
+		if support_alert != null and support_alert.state != "Benign":
+			var reviewed := support_alert.reviewed
+			actions.append(ResponseActionType.new({"id": "close_benign", "title": "Close as Benign", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 0.1, "impact": "None", "benefit": "Closes this contextual alert without affecting the incident case.", "limitation": "Evidence supports this classification." if reviewed else "The session context has not been verified. Closing now will be recorded as an unsupported classification.", "consequence": "The Workstation B attention marker is cleared; the authorized session may finish normally."}))
+			actions.append(ResponseActionType.new({"id": "keep_open", "title": "Keep Open", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 0.1, "impact": "None", "benefit": "Leaves the contextual alert available for later review.", "limitation": "No classification is recorded.", "consequence": "No operational impact and no activity is restarted."}))
+		return actions
 	if process_id != "update_bridge" or device_id != "workstation_a":
 		return actions
 	var process := process_store.find(process_id, device_id)
@@ -59,7 +71,7 @@ func start(action: ResponseActionType) -> bool:
 		return false
 	active_action = action
 	action_started_at = clock.elapsed_seconds
-	var event_type := "investigation_started" if action.id.begins_with("analyze") or action.id.begins_with("trace") else "response_started"
+	var event_type := "investigation_started" if action.id.begins_with("analyze") or action.id.begins_with("trace") or action.id.begins_with("review") else "response_started"
 	_record(event_type, "%s started: %s." % ["Investigation" if event_type == "investigation_started" else "Defensive action", action.title], action.target_device_id, "Attention")
 	action_started.emit(action)
 	return true
@@ -68,7 +80,7 @@ func _on_time_changed(time_value: float) -> void:
 	if active_action == null:
 		return
 	var elapsed := time_value - action_started_at
-	var progress := clampf(elapsed / active_action.duration_seconds, 0.0, 1.0)
+	var progress := clampf(elapsed / maxf(active_action.duration_seconds, 0.1), 0.0, 1.0)
 	action_progressed.emit(active_action, progress, maxf(0.0, active_action.duration_seconds - elapsed))
 	if progress >= 1.0:
 		_complete_active_action()
@@ -82,6 +94,19 @@ func _complete_active_action() -> void:
 	elif completed.id == "trace_connection":
 		evidence_store.add(EvidenceDataType.new({"id": "external_communication", "title": "Recurring external communication", "source": "Connection Trace", "timestamp": clock.elapsed_seconds, "device_id": completed.target_device_id, "confidence": "Moderate", "summary": "Workstation A → Firewall → endpoint ext-gateway-17.", "facts": PackedStringArray(["Originated at Workstation A", "Traversed Firewall", "Reached unrecognized endpoint ext-gateway-17", "Repeated outside normal profile"])}))
 		_record("investigation_completed", "Connection trace completed; recurring external communication evidence created.", completed.target_device_id, "Normal")
+	elif completed.id == "review_session_context":
+		support_evidence_store.add(EvidenceDataType.new({"id": "approved_remote_support", "title": "Approved remote support session", "source": "Session Context Review", "timestamp": clock.elapsed_seconds, "device_id": completed.target_device_id, "confidence": "High", "summary": "Northstar Support Systems session matched the approved maintenance window and corporate support relay.", "facts": PackedStringArray(["Publisher recognized: Northstar Support Systems", "Valid signature verified", "Origin is on the corporate authorized support list", "Approved maintenance window and ticket SR-2048", "No activity outside the support scope observed"])}))
+		var support_alert := alert_system.alert_for_device(completed.target_device_id)
+		if support_alert != null:
+			support_alert.reviewed = true
+			alert_system.alert_updated.emit(support_alert)
+		_record("investigation_completed", "Session context verified; approved remote support evidence created.", completed.target_device_id, "Normal")
+	elif completed.id == "close_benign":
+		alert_system.close_as_benign(completed.target_device_id)
+		_record("alert_triaged", "Remote support alert was closed as benign.", completed.target_device_id, "Normal")
+		support_alert_closed.emit(completed.target_device_id)
+	elif completed.id == "keep_open":
+		_record("alert_triage", "Remote support alert was kept open for later review.", completed.target_device_id, "Normal")
 	elif completed.id == "terminate_process":
 		var process := process_store.find(completed.target_process_id, completed.target_device_id)
 		if process != null:

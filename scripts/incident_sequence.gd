@@ -12,6 +12,7 @@ signal unusual_route_changed(is_active: bool)
 signal suspicious_access_attempt(timestamp: float)
 signal file_server_session_established(timestamp: float)
 signal abnormal_transfer_started(timestamp: float)
+signal remote_support_started(timestamp: float)
 
 var clock: SimulationClockType
 var event_log: EventLogType
@@ -36,6 +37,8 @@ func _on_time_changed(time_value: float) -> void:
 	_emit_once("unverified_process", 7.0, time_value, _record_unverified_process)
 	_emit_once("outbound_pattern", 9.0, time_value, _record_outbound_pattern)
 	_emit_once("first_alert", 11.5, time_value, _record_alert)
+	if alert_started_at >= 0.0:
+		_emit_once("remote_support", alert_started_at + 4.5, time_value, _record_remote_support)
 	if alert_started_at >= 0.0 and not escalation_prevented:
 		_emit_once("file_server_attempt", alert_started_at + 15.0, time_value, _record_file_server_attempt)
 	if escalation_started_at >= 0.0 and not escalation_prevented:
@@ -65,6 +68,13 @@ func _record_alert() -> void:
 	_record("first_alert", "alert_created", "Network Sensor", "Workstation A", "Workstation A generated a recurring external connection outside its usual activity profile.", 0.61, "Attention", "workstation_a", {"title": "Repeated outbound pattern"})
 	observation_changed.emit("workstation_a", "Anomaly observed")
 	alert_started_at = clock.elapsed_seconds
+
+func _record_remote_support() -> void:
+	process_store.add(ProcessDataType.new({"id": "relay_support", "device_id": "workstation_b", "process_name": "relay_support.exe", "user_name": "support.agent", "publisher": "Northstar Support Systems", "file_path": "C:/Program Files/Northstar Support/relay_support.exe", "started_at": clock.elapsed_seconds, "classification": "Observed", "has_network_activity": true, "description": "Authorized corporate remote-support session from the approved support relay. Maintenance window is pending contextual review."}))
+	_record("remote_support_session", "remote_session_observed", "Access Monitor", "Workstation B", "Workstation B accepted a remote session outside its usual local activity pattern.", 0.35, "Review", "workstation_b")
+	_record("remote_support_alert", "alert_created", "Access Monitor", "Workstation B", "Workstation B accepted a remote session outside its usual local activity pattern.", 0.35, "Review", "workstation_b", {"title": "Unusual remote session", "priority": "Review", "context_kind": "contextual"})
+	observation_changed.emit("workstation_b", "Anomaly observed")
+	remote_support_started.emit(clock.elapsed_seconds)
 
 func prevent_escalation() -> void:
 	escalation_prevented = true

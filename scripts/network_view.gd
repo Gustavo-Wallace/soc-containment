@@ -147,6 +147,9 @@ func start_escalation_route(started_at: float) -> void:
 func start_business_sync(started_at: float) -> void:
 	activity.start_business_sync(started_at)
 
+func start_remote_support(started_at: float) -> void:
+	activity.start_remote_support(started_at)
+
 func isolate_device(device_id: String) -> void:
 	set_observed_state(device_id, "Isolated")
 	connections.set_blocked_device(device_id)
