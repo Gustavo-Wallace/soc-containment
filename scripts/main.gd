@@ -21,6 +21,9 @@ const ResponseActionType = preload("res://scripts/response_action.gd")
 const INCIDENT_STATE_SCRIPT := preload("res://scripts/incident_state.gd")
 const IncidentStateType = preload("res://scripts/incident_state.gd")
 const ReportOverlayType = preload("res://scripts/report_overlay.gd")
+const EVIDENCE_STORE_SCRIPT := preload("res://scripts/evidence_store.gd")
+const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
+const EvidenceDataType = preload("res://scripts/evidence_data.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -42,6 +45,7 @@ var alert_system: AlertSystemType
 var incident_sequence: IncidentSequenceType
 var response_controller: ResponseControllerType
 var incident_state: IncidentStateType
+var evidence_store: EvidenceStoreType
 
 func _ready() -> void:
 	_create_simulation_systems()
@@ -63,6 +67,7 @@ func _ready() -> void:
 	incident_sequence.suspicious_access_attempt.connect(_on_suspicious_access_attempt)
 	incident_sequence.file_server_session_established.connect(_on_file_server_session)
 	incident_sequence.abnormal_transfer_started.connect(_on_abnormal_transfer)
+	incident_sequence.suspicious_access_attempt.connect(_on_escalation_evidence)
 	response_controller.action_completed.connect(_on_action_completed)
 	response_controller.process_terminated.connect(_on_process_terminated)
 	response_controller.device_isolated.connect(_on_device_isolated)
@@ -84,6 +89,7 @@ func _create_simulation_systems() -> void:
 	incident_sequence = INCIDENT_SEQUENCE_SCRIPT.new()
 	response_controller = RESPONSE_CONTROLLER_SCRIPT.new()
 	incident_state = INCIDENT_STATE_SCRIPT.new()
+	evidence_store = EVIDENCE_STORE_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
@@ -91,9 +97,10 @@ func _create_simulation_systems() -> void:
 	systems.add_child(incident_sequence)
 	systems.add_child(response_controller)
 	systems.add_child(incident_state)
+	systems.add_child(evidence_store)
 	alert_system.configure(event_log)
 	incident_sequence.configure(clock, event_log, process_store)
-	response_controller.configure(clock, event_log, process_store, alert_system)
+	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store)
 	incident_state.configure(clock, event_log)
 
 func _update_time(_time_value: float) -> void:
@@ -167,6 +174,9 @@ func _on_suspicious_access_attempt(started_at: float) -> void:
 	status_dot.color = VisualStyle.AMBER
 	incident_state.mark_escalated()
 
+func _on_escalation_evidence(_started_at: float) -> void:
+	evidence_store.add(EvidenceDataType.new({"id": "file_server_access", "title": "Unusual file server access", "source": "Network Sensor", "timestamp": clock.elapsed_seconds, "device_id": "file_server", "confidence": "Moderate", "summary": "Workstation A initiated an unusual authentication attempt toward File Server.", "facts": PackedStringArray(["Route passed through Firewall", "Attempt targeted File Server", "Activity was outside the workstation profile"])}))
+
 func _on_file_server_session(started_at: float) -> void:
 	network_view.start_escalation_route(started_at)
 	alert_system.update_current("Open", 0.78, "Unauthorized File Server session observed.")
@@ -181,7 +191,7 @@ func _on_abnormal_transfer(_started_at: float) -> void:
 
 func _on_report_requested(outcome: String) -> void:
 	clock.pause()
-	report_overlay.show_report(outcome, event_log, incident_state)
+	report_overlay.show_report(outcome, event_log, incident_state, evidence_store)
 
 func _restart_incident() -> void:
 	get_tree().reload_current_scene()

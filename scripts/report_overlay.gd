@@ -4,6 +4,7 @@ extends Control
 const EventLogType = preload("res://scripts/event_log.gd")
 const IncidentStateType = preload("res://scripts/incident_state.gd")
 const VisualStyle = preload("res://scripts/visuals.gd")
+const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
 
 signal restart_requested
 
@@ -11,6 +12,7 @@ var event_log: EventLogType
 var incident_state: IncidentStateType
 var outcome := ""
 var restart_button: Button
+var evidence_store: EvidenceStoreType
 
 func _ready() -> void:
 	restart_button = Button.new()
@@ -20,10 +22,11 @@ func _ready() -> void:
 	restart_button.pressed.connect(func() -> void: restart_requested.emit())
 	add_child(restart_button)
 
-func show_report(value: String, log_value: EventLogType, state_value: IncidentStateType) -> void:
+func show_report(value: String, log_value: EventLogType, state_value: IncidentStateType, evidence_value: EvidenceStoreType) -> void:
 	outcome = value
 	event_log = log_value
 	incident_state = state_value
+	evidence_store = evidence_value
 	visible = true
 	queue_redraw()
 
@@ -51,10 +54,10 @@ func _draw() -> void:
 			break
 	draw_string(font, Vector2(214, 462), "RESPONSE ASSESSMENT", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, VisualStyle.MUTED_TEXT)
 	draw_multiline_string(font, Vector2(214, 474), _response_assessment(), HORIZONTAL_ALIGNMENT_LEFT, 750, 12, 2, VisualStyle.TEXT)
-	draw_string(font, Vector2(214, 525), "CONFIRMED FINDINGS", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, VisualStyle.MUTED_TEXT)
-	draw_string(font, Vector2(214, 545), _findings(), HORIZONTAL_ALIGNMENT_LEFT, 750, 11, VisualStyle.TEXT)
+	draw_string(font, Vector2(214, 525), "INVESTIGATION QUALITY: " + _investigation_quality(), HORIZONTAL_ALIGNMENT_LEFT, -1, 11, VisualStyle.MUTED_TEXT)
+	draw_string(font, Vector2(214, 545), "Evidence: " + _evidence_titles(), HORIZONTAL_ALIGNMENT_LEFT, 750, 10, VisualStyle.TEXT)
 	draw_string(font, Vector2(214, 579), "UNRESOLVED QUESTIONS", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, VisualStyle.MUTED_TEXT)
-	draw_multiline_string(font, Vector2(214, 591), "Exact origin of update_bridge.exe; mechanism that started it; whether additional persistence exists.", HORIZONTAL_ALIGNMENT_LEFT, 580, 10, 2, VisualStyle.MUTED_TEXT)
+	draw_multiline_string(font, Vector2(214, 591), _unresolved(), HORIZONTAL_ALIGNMENT_LEFT, 580, 10, 2, VisualStyle.MUTED_TEXT)
 
 func _outcome_summary() -> String:
 	if outcome == "Successful Containment":
@@ -72,6 +75,30 @@ func _findings() -> String:
 	if incident_state.session_established:
 		return "A suspicious File Server session was established from Workstation A."
 	return "update_bridge.exe was unverified and associated with recurring external activity."
+
+func _evidence_titles() -> String:
+	if evidence_store.evidence.is_empty():
+		return "None collected."
+	var titles: PackedStringArray = []
+	for item in evidence_store.evidence:
+		titles.append(item.title)
+	return ", ".join(titles)
+
+func _investigation_quality() -> String:
+	if evidence_store.evidence.size() >= 2:
+		return "STRONG — multiple relevant observations collected"
+	if evidence_store.evidence.size() == 1:
+		return "SUPPORTED — one investigation completed"
+	return "LIMITED — no investigation completed"
+
+func _unresolved() -> String:
+	var questions: PackedStringArray = []
+	if not evidence_store.has("process_profile"):
+		questions.append("Executable properties remain unknown")
+	if not evidence_store.has("external_communication"):
+		questions.append("External destination and cadence remain unclear")
+	questions.append("Initial execution mechanism and possible persistence")
+	return "; ".join(questions)
 
 func _format_time(value: float) -> String:
 	var seconds := int(value)

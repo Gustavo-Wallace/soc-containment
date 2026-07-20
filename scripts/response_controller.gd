@@ -7,6 +7,8 @@ const ProcessStoreType = preload("res://scripts/process_store.gd")
 const AlertSystemType = preload("res://scripts/alert_system.gd")
 const ResponseActionType = preload("res://scripts/response_action.gd")
 const SimulationEventType = preload("res://scripts/simulation_event.gd")
+const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
+const EvidenceDataType = preload("res://scripts/evidence_data.gd")
 
 signal action_started(action: ResponseActionType)
 signal action_progressed(action: ResponseActionType, progress: float, remaining_seconds: float)
@@ -22,20 +24,28 @@ var alert_system: AlertSystemType
 var active_action: ResponseActionType
 var action_started_at := 0.0
 var operational_impact := "None"
+var evidence_store: EvidenceStoreType
 
-func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, alerts_value: AlertSystemType) -> void:
+func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, alerts_value: AlertSystemType, evidence_value: EvidenceStoreType) -> void:
 	clock = clock_value
 	event_log = log_value
 	process_store = store_value
 	alert_system = alerts_value
+	evidence_store = evidence_value
 	clock.time_changed.connect(_on_time_changed)
 
 func actions_for_process(process_id: String, device_id: String, observed_state: String) -> Array[ResponseActionType]:
 	var actions: Array[ResponseActionType] = []
-	if process_id != "update_bridge" or device_id != "workstation_a" or observed_state == "Isolated":
+	if process_id != "update_bridge" or device_id != "workstation_a":
 		return actions
 	var process := process_store.find(process_id, device_id)
-	if process == null or process.classification == "Terminated":
+	if process == null:
+		return actions
+	if not evidence_store.has("process_profile"):
+		actions.append(ResponseActionType.new({"id": "analyze_process", "title": "Analyze Process", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 4.0, "impact": "None", "benefit": "Examines preserved process properties and behavior.", "limitation": "Does not interrupt the process.", "consequence": "No operational impact."}))
+	if not evidence_store.has("external_communication") and observed_state != "Isolated" and process.classification != "Terminated":
+		actions.append(ResponseActionType.new({"id": "trace_connection", "title": "Trace Connection", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 5.0, "impact": "None", "benefit": "Correlates the recurring connection with its observed route.", "limitation": "Does not block traffic.", "consequence": "No operational impact."}))
+	if observed_state == "Isolated" or process.classification == "Terminated":
 		return actions
 	actions.append(ResponseActionType.new({"id": "terminate_process", "title": "Terminate Process", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 3.0, "impact": "Low", "benefit": "Stops the process and its associated connection.", "limitation": "Execution origin and possible additional mechanisms remain unknown.", "consequence": "The workstation remains online under monitoring."}))
 	actions.append(ResponseActionType.new({"id": "isolate_device", "title": "Isolate Device", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 5.0, "impact": "Medium", "benefit": "Blocks all workstation network communication.", "limitation": "The process remains available for investigation.", "consequence": "The finance workstation becomes unavailable."}))
@@ -49,7 +59,8 @@ func start(action: ResponseActionType) -> bool:
 		return false
 	active_action = action
 	action_started_at = clock.elapsed_seconds
-	_record("response_started", "Defensive action started: %s." % action.title, action.target_device_id, "Attention")
+	var event_type := "investigation_started" if action.id.begins_with("analyze") or action.id.begins_with("trace") else "response_started"
+	_record(event_type, "%s started: %s." % ["Investigation" if event_type == "investigation_started" else "Defensive action", action.title], action.target_device_id, "Attention")
 	action_started.emit(action)
 	return true
 
@@ -65,7 +76,13 @@ func _on_time_changed(time_value: float) -> void:
 func _complete_active_action() -> void:
 	var completed := active_action
 	active_action = null
-	if completed.id == "terminate_process":
+	if completed.id == "analyze_process":
+		evidence_store.add(EvidenceDataType.new({"id": "process_profile", "title": "Unverified process profile", "source": "Process Analysis", "timestamp": clock.elapsed_seconds, "device_id": completed.target_device_id, "confidence": "Moderate", "summary": "Unrecognized publisher and uncommon local execution path.", "facts": PackedStringArray(["Publisher not recognized", "Path outside workstation baseline", "Started shortly before external connection", "Absent from known device profile"])}))
+		_record("investigation_completed", "Process analysis completed; unverified profile evidence created.", completed.target_device_id, "Normal")
+	elif completed.id == "trace_connection":
+		evidence_store.add(EvidenceDataType.new({"id": "external_communication", "title": "Recurring external communication", "source": "Connection Trace", "timestamp": clock.elapsed_seconds, "device_id": completed.target_device_id, "confidence": "Moderate", "summary": "Workstation A → Firewall → endpoint ext-gateway-17.", "facts": PackedStringArray(["Originated at Workstation A", "Traversed Firewall", "Reached unrecognized endpoint ext-gateway-17", "Repeated outside normal profile"])}))
+		_record("investigation_completed", "Connection trace completed; recurring external communication evidence created.", completed.target_device_id, "Normal")
+	elif completed.id == "terminate_process":
 		var process := process_store.find(completed.target_process_id, completed.target_device_id)
 		if process != null:
 			process.classification = "Terminated"

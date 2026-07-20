@@ -16,6 +16,7 @@ O mapa apresenta dispositivos e conexões de uma pequena rede corporativa. Cada 
 - Relógio de simulação com pausa e velocidade 2×.
 - Primeiro alerta roteirizado, com observações recentes e inspeção de processos.
 - Decisões de contenção, escalada roteirizada, resultados e relatório final do primeiro incidente.
+- Investigações temporizadas de processo e conexão, com evidências e hipótese operacional.
 
 ## Requisitos e execução
 
