@@ -1,12 +1,14 @@
 class_name SelectionController
 extends Node
 
-signal selection_changed(data: DeviceData)
+const DeviceDataType = preload("res://scripts/device_data.gd")
+
+signal selection_changed(data: DeviceDataType)
 signal selection_cleared
 
-var current: DeviceData
+var current: DeviceDataType
 
-func select(data: DeviceData) -> void:
+func select(data: DeviceDataType) -> void:
 	if current == data:
 		return
 	current = data

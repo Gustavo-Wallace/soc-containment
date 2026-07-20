@@ -1,17 +1,21 @@
 class_name AlertSystem
 extends Node
 
-signal alert_created(alert: AlertData)
+const AlertDataType = preload("res://scripts/alert_data.gd")
+const EventLogType = preload("res://scripts/event_log.gd")
+const SimulationEventType = preload("res://scripts/simulation_event.gd")
 
-var alerts: Array[AlertData] = []
+signal alert_created(alert: AlertDataType)
 
-func configure(event_log: EventLog) -> void:
+var alerts: Array[AlertDataType] = []
+
+func configure(event_log: EventLogType) -> void:
 	event_log.event_recorded.connect(_on_event_recorded)
 
-func _on_event_recorded(event: SimulationEvent) -> void:
+func _on_event_recorded(event: SimulationEventType) -> void:
 	if event.event_type != "alert_created":
 		return
-	var alert := AlertData.new({
+	var alert: AlertDataType = AlertDataType.new({
 		"id": event.id,
 		"timestamp": event.timestamp,
 		"title": event.additional_data.get("title", "Observation alert"),

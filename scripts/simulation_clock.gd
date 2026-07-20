@@ -16,11 +16,29 @@ func _process(delta: float) -> void:
 	time_changed.emit(elapsed_seconds)
 
 func toggle_pause() -> void:
-	is_paused = not is_paused
-	paused_changed.emit(is_paused)
+	if is_paused:
+		resume()
+	else:
+		pause()
+
+func pause() -> void:
+	if is_paused:
+		return
+	is_paused = true
+	paused_changed.emit(true)
+
+func resume() -> void:
+	if not is_paused:
+		return
+	is_paused = false
+	paused_changed.emit(false)
 
 func set_speed(multiplier: float) -> void:
 	var next := 2.0 if is_equal_approx(multiplier, 2.0) else 1.0
+	if is_equal_approx(speed_multiplier, next):
+		return
+	if is_paused:
+		resume()
 	if is_equal_approx(speed_multiplier, next):
 		return
 	speed_multiplier = next
@@ -28,4 +46,4 @@ func set_speed(multiplier: float) -> void:
 
 func formatted_time() -> String:
 	var whole_seconds := int(elapsed_seconds)
-	return "%02d:%02d" % [whole_seconds / 60, whole_seconds % 60]
+	return "%02d:%02d" % [int(float(whole_seconds) / 60.0), whole_seconds % 60]

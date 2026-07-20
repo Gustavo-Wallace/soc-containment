@@ -1,18 +1,20 @@
 class_name EventLog
 extends Node
 
-signal event_recorded(event: SimulationEvent)
+const SimulationEventType = preload("res://scripts/simulation_event.gd")
 
-var events: Array[SimulationEvent] = []
+signal event_recorded(event: SimulationEventType)
 
-func record(event: SimulationEvent) -> void:
+var events: Array[SimulationEventType] = []
+
+func record(event: SimulationEventType) -> void:
 	events.append(event)
 	event_recorded.emit(event)
 
-func visible_events_for_device(device_id: String, limit: int = 3) -> Array[SimulationEvent]:
-	var result: Array[SimulationEvent] = []
+func visible_events_for_device(device_id: String, limit: int = 3) -> Array[SimulationEventType]:
+	var result: Array[SimulationEventType] = []
 	for index: int in range(events.size() - 1, -1, -1):
-		var event := events[index]
+		var event: SimulationEventType = events[index]
 		if event.visible_to_player and event.related_device_id == device_id:
 			result.append(event)
 			if result.size() >= limit:

@@ -1,7 +1,15 @@
 class_name NetworkView
 extends Control
 
-signal device_selected(data: DeviceData)
+const DeviceDataType = preload("res://scripts/device_data.gd")
+const DeviceNodeType = preload("res://scripts/device_node.gd")
+const ConnectionLayerType = preload("res://scripts/connection_layer.gd")
+const ActivityControllerType = preload("res://scripts/activity_controller.gd")
+const SelectionControllerType = preload("res://scripts/selection_controller.gd")
+const NetworkDataType = preload("res://scripts/network_data.gd")
+const VisualStyle = preload("res://scripts/visuals.gd")
+
+signal device_selected(data: DeviceDataType)
 signal selection_cleared
 
 const DEVICE_SCENE := preload("res://scenes/device_node.tscn")
@@ -9,9 +17,9 @@ const CONNECTION_SCENE := preload("res://scenes/connection_layer.tscn")
 const ACTIVITY_SCENE := preload("res://scenes/activity_controller.tscn")
 
 var camera: Control
-var connections: ConnectionLayer
-var activity: ActivityController
-var selection_controller: SelectionController
+var connections: ConnectionLayerType
+var activity: ActivityControllerType
+var selection_controller: SelectionControllerType
 var device_nodes: Dictionary = {}
 var selected_id := ""
 var camera_scale := 1.0
@@ -20,7 +28,7 @@ var pan_origin := Vector2.ZERO
 
 func _ready() -> void:
 	gui_input.connect(_on_gui_input)
-	selection_controller = SelectionController.new()
+	selection_controller = SelectionControllerType.new()
 	selection_controller.selection_changed.connect(_apply_selection)
 	selection_controller.selection_cleared.connect(_remove_selection)
 	add_child(selection_controller)
@@ -34,12 +42,12 @@ func _ready() -> void:
 	activity = ACTIVITY_SCENE.instantiate()
 	activity.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	camera.add_child(activity)
-	var devices := NetworkData.create_devices()
-	var links := NetworkData.create_links()
+	var devices := NetworkDataType.create_devices()
+	var links := NetworkDataType.create_links()
 	connections.configure(devices, links)
 	activity.configure(devices, links)
-	for data: DeviceData in devices:
-		var node: DeviceNode = DEVICE_SCENE.instantiate()
+	for data: DeviceDataType in devices:
+		var node: DeviceNodeType = DEVICE_SCENE.instantiate()
 		node.configure(data)
 		node.device_selected.connect(_select_device)
 		camera.add_child(node)
@@ -49,9 +57,9 @@ func _ready() -> void:
 func _draw() -> void:
 	var grid_step := 48.0
 	for x: int in range(0, int(size.x) + 1, int(grid_step)):
-		draw_line(Vector2(x, 0), Vector2(x, size.y), Visuals.GRID, 1.0)
+		draw_line(Vector2(x, 0), Vector2(x, size.y), VisualStyle.GRID, 1.0)
 	for y: int in range(0, int(size.y) + 1, int(grid_step)):
-		draw_line(Vector2(0, y), Vector2(size.x, y), Visuals.GRID, 1.0)
+		draw_line(Vector2(0, y), Vector2(size.x, y), VisualStyle.GRID, 1.0)
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_RESIZED:
@@ -91,12 +99,12 @@ func _clamp_camera() -> void:
 	camera.position.x = clampf(camera.position.x, -480.0, 240.0)
 	camera.position.y = clampf(camera.position.y, -270.0, 190.0)
 
-func _select_device(data: DeviceData) -> void:
+func _select_device(data: DeviceDataType) -> void:
 	selection_controller.select(data)
 
-func _apply_selection(data: DeviceData) -> void:
+func _apply_selection(data: DeviceDataType) -> void:
 	if selected_id != "" and device_nodes.has(selected_id):
-		var previous: DeviceNode = device_nodes[selected_id]
+		var previous: DeviceNodeType = device_nodes[selected_id]
 		previous.set_selected(false)
 		if previous.data.observed_state == "Under inspection":
 			previous.data.observed_state = "Anomaly observed"
@@ -104,7 +112,7 @@ func _apply_selection(data: DeviceData) -> void:
 	selected_id = data.id
 	if data.observed_state == "Anomaly observed":
 		data.observed_state = "Under inspection"
-	(device_nodes[selected_id] as DeviceNode).set_selected(true)
+		(device_nodes[selected_id] as DeviceNodeType).set_selected(true)
 	connections.set_selected(selected_id)
 	device_selected.emit(data)
 
@@ -113,7 +121,7 @@ func clear_selection() -> void:
 
 func _remove_selection() -> void:
 	if selected_id != "" and device_nodes.has(selected_id):
-		(device_nodes[selected_id] as DeviceNode).set_selected(false)
+		(device_nodes[selected_id] as DeviceNodeType).set_selected(false)
 	selected_id = ""
 	connections.set_selected("")
 	selection_cleared.emit()
@@ -126,17 +134,20 @@ func reset_view() -> void:
 func set_observed_state(device_id: String, observed_state: String) -> void:
 	if not device_nodes.has(device_id):
 		return
-	var node: DeviceNode = device_nodes[device_id]
+	var node: DeviceNodeType = device_nodes[device_id]
 	node.data.observed_state = observed_state
 	node.queue_redraw()
 
 func set_unusual_route(active: bool) -> void:
 	activity.set_unusual_route(active)
 
+func set_simulation_time(time_value: float) -> void:
+	activity.set_simulation_time(time_value)
+
 func focus_and_select(device_id: String) -> void:
 	if not device_nodes.has(device_id):
 		return
-	var node: DeviceNode = device_nodes[device_id]
+	var node: DeviceNodeType = device_nodes[device_id]
 	camera.position = size * 0.5 - node.data.position * camera_scale
 	_clamp_camera()
 	selection_controller.select(node.data)
