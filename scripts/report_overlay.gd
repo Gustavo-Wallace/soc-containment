@@ -5,6 +5,7 @@ const EventLogType = preload("res://scripts/event_log.gd")
 const IncidentStateType = preload("res://scripts/incident_state.gd")
 const VisualStyle = preload("res://scripts/visuals.gd")
 const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
+const BusinessFlowType = preload("res://scripts/business_flow.gd")
 
 signal restart_requested
 
@@ -13,6 +14,7 @@ var incident_state: IncidentStateType
 var outcome := ""
 var restart_button: Button
 var evidence_store: EvidenceStoreType
+var business_flow: BusinessFlowType
 
 func _ready() -> void:
 	restart_button = Button.new()
@@ -22,11 +24,12 @@ func _ready() -> void:
 	restart_button.pressed.connect(func() -> void: restart_requested.emit())
 	add_child(restart_button)
 
-func show_report(value: String, log_value: EventLogType, state_value: IncidentStateType, evidence_value: EvidenceStoreType) -> void:
+func show_report(value: String, log_value: EventLogType, state_value: IncidentStateType, evidence_value: EvidenceStoreType, business_value: BusinessFlowType) -> void:
 	outcome = value
 	event_log = log_value
 	incident_state = state_value
 	evidence_store = evidence_value
+	business_flow = business_value
 	visible = true
 	queue_redraw()
 
@@ -58,6 +61,9 @@ func _draw() -> void:
 	draw_string(font, Vector2(214, 545), "Evidence: " + _evidence_titles(), HORIZONTAL_ALIGNMENT_LEFT, 750, 10, VisualStyle.TEXT)
 	draw_string(font, Vector2(214, 579), "UNRESOLVED QUESTIONS", HORIZONTAL_ALIGNMENT_LEFT, -1, 11, VisualStyle.MUTED_TEXT)
 	draw_multiline_string(font, Vector2(214, 591), _unresolved(), HORIZONTAL_ALIGNMENT_LEFT, 580, 10, 2, VisualStyle.MUTED_TEXT)
+	draw_string(font, Vector2(700, 525), "BUSINESS CONTINUITY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, VisualStyle.MUTED_TEXT)
+	draw_string(font, Vector2(700, 544), "%s • %d completed • %d missed" % [business_flow.state, business_flow.completed_runs, business_flow.missed_runs], HORIZONTAL_ALIGNMENT_LEFT, 280, 10, VisualStyle.TEXT)
+	draw_string(font, Vector2(700, 561), "Downtime: %.1fs" % business_flow.downtime_seconds, HORIZONTAL_ALIGNMENT_LEFT, 280, 10, VisualStyle.MUTED_TEXT)
 
 func _outcome_summary() -> String:
 	if outcome == "Successful Containment":

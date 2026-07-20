@@ -24,6 +24,8 @@ const ReportOverlayType = preload("res://scripts/report_overlay.gd")
 const EVIDENCE_STORE_SCRIPT := preload("res://scripts/evidence_store.gd")
 const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
 const EvidenceDataType = preload("res://scripts/evidence_data.gd")
+const BUSINESS_FLOW_SCRIPT := preload("res://scripts/business_flow.gd")
+const BusinessFlowType = preload("res://scripts/business_flow.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -37,6 +39,7 @@ const EvidenceDataType = preload("res://scripts/evidence_data.gd")
 @onready var alert_tray: AlertTrayType = $Content/AlertTray
 @onready var impact_label: Label = $TopBar/ImpactLabel
 @onready var report_overlay: ReportOverlayType = $ReportOverlay
+@onready var business_label: Label = $Content/BusinessStatus
 
 var clock: SimulationClockType
 var event_log: EventLogType
@@ -46,6 +49,7 @@ var incident_sequence: IncidentSequenceType
 var response_controller: ResponseControllerType
 var incident_state: IncidentStateType
 var evidence_store: EvidenceStoreType
+var business_flow: BusinessFlowType
 
 func _ready() -> void:
 	_create_simulation_systems()
@@ -67,6 +71,9 @@ func _ready() -> void:
 	incident_sequence.suspicious_access_attempt.connect(_on_suspicious_access_attempt)
 	incident_sequence.file_server_session_established.connect(_on_file_server_session)
 	incident_sequence.abnormal_transfer_started.connect(_on_abnormal_transfer)
+	business_flow.sync_started.connect(network_view.start_business_sync)
+	business_flow.sync_missed.connect(_on_business_sync_missed)
+	business_flow.flow_changed.connect(_update_business_status)
 	incident_sequence.suspicious_access_attempt.connect(_on_escalation_evidence)
 	response_controller.action_completed.connect(_on_action_completed)
 	response_controller.process_terminated.connect(_on_process_terminated)
@@ -90,6 +97,7 @@ func _create_simulation_systems() -> void:
 	response_controller = RESPONSE_CONTROLLER_SCRIPT.new()
 	incident_state = INCIDENT_STATE_SCRIPT.new()
 	evidence_store = EVIDENCE_STORE_SCRIPT.new()
+	business_flow = BUSINESS_FLOW_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
@@ -98,16 +106,19 @@ func _create_simulation_systems() -> void:
 	systems.add_child(response_controller)
 	systems.add_child(incident_state)
 	systems.add_child(evidence_store)
+	systems.add_child(business_flow)
 	alert_system.configure(event_log)
 	incident_sequence.configure(clock, event_log, process_store)
 	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store)
 	incident_state.configure(clock, event_log)
+	business_flow.configure(clock, event_log)
 
 func _update_time(_time_value: float) -> void:
 	time_label.text = clock.formatted_time()
 
 func _update_pause_button(is_paused: bool) -> void:
 	_update_time_mode()
+	_update_business_status()
 
 func _update_speed_buttons(multiplier: float) -> void:
 	_update_time_mode()
@@ -156,6 +167,7 @@ func _on_process_terminated(_device_id: String) -> void:
 
 func _on_device_isolated(device_id: String) -> void:
 	network_view.isolate_device(device_id)
+	business_flow.set_isolated(true)
 	status_label.text = "DEVICE CONTAINED"
 	status_dot.color = VisualStyle.MUTED_TEXT
 
@@ -191,7 +203,14 @@ func _on_abnormal_transfer(_started_at: float) -> void:
 
 func _on_report_requested(outcome: String) -> void:
 	clock.pause()
-	report_overlay.show_report(outcome, event_log, incident_state, evidence_store)
+	report_overlay.show_report(outcome, event_log, incident_state, evidence_store, business_flow)
 
 func _restart_incident() -> void:
 	get_tree().reload_current_scene()
+
+func _on_business_sync_missed(_timestamp: float) -> void:
+	business_label.text = "FINANCE SYNC: INTERRUPTED • RUN MISSED"
+
+func _update_business_status() -> void:
+	var last_value := "--:--" if business_flow.last_execution < 0.0 else "%02d:%02d" % [int(float(int(business_flow.last_execution)) / 60.0), int(business_flow.last_execution) % 60]
+	business_label.text = "FINANCE DOCUMENT SYNC • %s • LAST %s • NEXT %02d:%02d" % [business_flow.state.to_upper(), last_value, int(float(int(business_flow.next_execution)) / 60.0), int(business_flow.next_execution) % 60]

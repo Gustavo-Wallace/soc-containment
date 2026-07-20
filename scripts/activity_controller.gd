@@ -11,6 +11,7 @@ var pulse_schedule := [0, 2, 3, 1, 4]
 var unusual_route_active := false
 var escalation_started_at := -1.0
 var blocked_device_id := ""
+var business_sync_started_at := -1.0
 
 func configure(device_list: Array[DeviceDataType], link_list: Array[PackedStringArray]) -> void:
 	links = link_list
@@ -37,6 +38,10 @@ func start_escalation(started_at: float) -> void:
 	escalation_started_at = started_at
 	queue_redraw()
 
+func start_business_sync(started_at: float) -> void:
+	business_sync_started_at = started_at
+	queue_redraw()
+
 func _draw() -> void:
 	if links.is_empty():
 		return
@@ -59,6 +64,8 @@ func _draw() -> void:
 		_draw_unusual_route()
 	if escalation_started_at >= 0.0 and simulation_time - escalation_started_at <= 4.0:
 		_draw_escalation_route()
+	if business_sync_started_at >= 0.0 and simulation_time - business_sync_started_at <= 2.4 and blocked_device_id != "workstation_a":
+		_draw_business_sync()
 
 func _draw_unusual_route() -> void:
 	var phase := fmod(simulation_time, 1.9) / 1.9
@@ -81,3 +88,12 @@ func _draw_escalation_route() -> void:
 	var point := first if phase < 0.5 else second
 	draw_circle(point, 7.0, Color(VisualStyle.AMBER, 0.18))
 	draw_circle(point, 2.8, VisualStyle.AMBER)
+
+func _draw_business_sync() -> void:
+	var phase := clampf((simulation_time - business_sync_started_at) / 2.4, 0.0, 1.0)
+	var workstation: Vector2 = points["workstation_a"]
+	var firewall: Vector2 = points["firewall"]
+	var file_server: Vector2 = points["file_server"]
+	var point := workstation.lerp(firewall, phase * 2.0) if phase < 0.5 else firewall.lerp(file_server, (phase - 0.5) * 2.0)
+	draw_circle(point, 6.0, Color(VisualStyle.PULSE, 0.18))
+	draw_circle(point, 2.6, VisualStyle.PULSE)

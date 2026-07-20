@@ -188,6 +188,16 @@ offset_top = 528.0
 offset_right = 310.0
 offset_bottom = 644.0
 
+[node name="BusinessStatus" type="Label" parent="Content" unique_id=652829651]
+layout_mode = 0
+offset_left = 18.0
+offset_top = 14.0
+offset_right = 560.0
+offset_bottom = 36.0
+theme_override_colors/font_color = Color(0.56, 0.8, 0.82, 1)
+theme_override_font_sizes/font_size = 10
+text = "FINANCE DOCUMENT SYNC • HEALTHY"
+
 [node name="DetailsPanel" parent="." unique_id=944057965 instance=ExtResource("3_details")]
 layout_mode = 1
 anchors_preset = 11

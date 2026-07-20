@@ -17,6 +17,7 @@ O mapa apresenta dispositivos e conexões de uma pequena rede corporativa. Cada 
 - Primeiro alerta roteirizado, com observações recentes e inspeção de processos.
 - Decisões de contenção, escalada roteirizada, resultados e relatório final do primeiro incidente.
 - Investigações temporizadas de processo e conexão, com evidências e hipótese operacional.
+- Fluxo legítimo Finance Document Sync, com continuidade operacional e impacto observável do isolamento.
 
 ## Requisitos e execução
 

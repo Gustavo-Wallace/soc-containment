@@ -144,6 +144,9 @@ func set_unusual_route(active: bool) -> void:
 func start_escalation_route(started_at: float) -> void:
 	activity.start_escalation(started_at)
 
+func start_business_sync(started_at: float) -> void:
+	activity.start_business_sync(started_at)
+
 func isolate_device(device_id: String) -> void:
 	set_observed_state(device_id, "Isolated")
 	connections.set_blocked_device(device_id)
