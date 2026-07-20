@@ -166,7 +166,20 @@ func _draw_processes(font: Font, y: float) -> void:
 		line_y += 24.0
 	if selected_process != null:
 		_draw_process_detail(font, line_y + 8.0)
-		_draw_response_actions(font, line_y + 118.0)
+		var action_y := line_y + 118.0
+		if current.id == "workstation_a" and response_controller.identity_context.suspicious_attempt_state != "None":
+			_draw_identity_context(font, action_y)
+			action_y += 120.0
+		_draw_response_actions(font, action_y)
+
+func _draw_identity_context(font: Font, y: float) -> void:
+	var identity = response_controller.identity_context
+	draw_line(Vector2(22, y - 8), Vector2(size.x - 22, y - 8), Color(VisualStyle.CONNECTION, 0.5), 1.0)
+	draw_string(font, Vector2(22, y + 4), "IDENTITY CONTEXT", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, VisualStyle.MUTED_TEXT)
+	draw_string(font, Vector2(22, y + 23), "Account: %s  •  Workstation A → File Server" % identity.account_name, HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 10, VisualStyle.TEXT)
+	draw_string(font, Vector2(22, y + 41), "Credential: %s  •  suspicious session: %s" % [identity.credential_state, identity.suspicious_session_state], HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 10, VisualStyle.AMBER if not identity.credentials_reset else VisualStyle.SELECTION)
+	draw_string(font, Vector2(22, y + 59), "Attempt: %s  •  local user session: %s" % [identity.suspicious_attempt_state, identity.local_session_state], HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 10, VisualStyle.TEXT)
+	draw_multiline_string(font, Vector2(22, y + 70), "Reset Credentials invalidates this credential and revokes associated File Server sessions; it does not terminate update_bridge.exe.", HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 9, 2, VisualStyle.MUTED_TEXT)
 
 func _draw_process_detail(font: Font, y: float) -> void:
 	draw_line(Vector2(22, y - 8), Vector2(size.x - 22, y - 8), Color(VisualStyle.CONNECTION, 0.5), 1.0)
@@ -212,7 +225,7 @@ func _draw_case_evidence(font: Font, y: float) -> void:
 	draw_string(font, Vector2(22, y + 4), "CASE EVIDENCE", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, VisualStyle.MUTED_TEXT)
 	var store = response_controller.evidence_store if current.id == "workstation_a" else response_controller.support_evidence_store
 	var confidence := store.hypothesis_confidence()
-	var heading := "Hypothesis (%s): Workstation A may be running unauthorized software communicating externally." % confidence if current.id == "workstation_a" else "Context verification (%s): Workstation B remote support session." % confidence
+	var heading := "Hypothesis (%s): Workstation A may be running unauthorized software communicating externally and may be misusing finance.analyst." % confidence if current.id == "workstation_a" else "Context verification (%s): Workstation B remote support session." % confidence
 	draw_string(font, Vector2(22, y + 22), heading, HORIZONTAL_ALIGNMENT_LEFT, size.x - 44, 9, VisualStyle.TEXT)
 	var evidence_y := y + 40.0
 	for item in store.evidence:
@@ -240,4 +253,4 @@ func _format_time(value: float) -> String:
 	return "%02d:%02d" % [int(float(seconds) / 60.0), seconds % 60]
 
 func _update_content_height() -> void:
-	custom_minimum_size.y = 1100.0 if selected_process != null and selected_process.id == "update_bridge" else (960.0 if selected_process != null and selected_process.id == "relay_support" else (760.0 if selected_process != null else 662.0))
+	custom_minimum_size.y = 1320.0 if selected_process != null and selected_process.id == "update_bridge" else (960.0 if selected_process != null and selected_process.id == "relay_support" else (760.0 if selected_process != null else 662.0))

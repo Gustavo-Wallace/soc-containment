@@ -1,0 +1,26 @@
+extends SceneTree
+
+const SimulationClockType = preload("res://scripts/simulation_clock.gd")
+const EventLogType = preload("res://scripts/event_log.gd")
+const IdentityContextType = preload("res://scripts/identity_context.gd")
+
+func _init() -> void:
+	var clock := SimulationClockType.new()
+	var log := EventLogType.new()
+	var identity := IdentityContextType.new()
+	identity.configure(clock, log)
+	assert(identity.observe_suspicious_attempt())
+	assert(identity.establish_suspicious_session())
+	assert(identity.begin_transfer())
+	identity.reset_credentials()
+	assert(identity.credential_version == 2)
+	assert(identity.local_session_state == "Revoked")
+	assert(identity.suspicious_session_state == "Revoked")
+	assert(not identity.transfer_active)
+	assert(identity.exposure_before_revocation)
+	var fresh_identity := IdentityContextType.new()
+	fresh_identity.configure(clock, log)
+	fresh_identity.reset_credentials()
+	assert(not fresh_identity.observe_suspicious_attempt())
+	assert(fresh_identity.suspicious_attempt_state == "Blocked")
+	quit(0)

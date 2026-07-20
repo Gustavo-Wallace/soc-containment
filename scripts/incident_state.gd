@@ -18,6 +18,10 @@ var session_established := false
 var containment_completed_at := -1.0
 var finalize_ready_at := -1.0
 var operational_impact := "None"
+var credentials_reset := false
+var transfer_started := false
+var failure_report_at := -1.0
+var report_sent := false
 
 func configure(clock_value: SimulationClockType, log_value: EventLogType) -> void:
 	clock = clock_value
@@ -42,9 +46,18 @@ func register_containment(action: ResponseActionType, impact: String) -> void:
 	finalize_ready_at = containment_completed_at + 5.0
 	_set_state("POST_CONTAINMENT")
 
+func register_identity_reset() -> void:
+	credentials_reset = true
+	if action_used != null and action_used.id == "terminate_process":
+		operational_impact = "Low"
+		containment_completed_at = clock.elapsed_seconds
+		finalize_ready_at = containment_completed_at + 5.0
+		_set_state("POST_CONTAINMENT")
+
 func mark_failed() -> void:
-	_set_state("FAILED")
-	report_requested.emit("Severe Compromise")
+	transfer_started = true
+	failure_report_at = clock.elapsed_seconds + 5.0
+	_set_state("EXPOSED")
 
 func can_finalize() -> bool:
 	return current_state == "POST_CONTAINMENT" and finalize_ready_at >= 0.0 and clock.elapsed_seconds >= finalize_ready_at
@@ -58,9 +71,14 @@ func finalize_incident() -> void:
 func _on_time_changed(_time_value: float) -> void:
 	if can_finalize():
 		finalize_available.emit()
+	if current_state == "EXPOSED" and failure_report_at >= 0.0 and clock.elapsed_seconds >= failure_report_at and not report_sent:
+		report_sent = true
+		report_requested.emit("Severe Compromise")
 
 func _outcome() -> String:
 	if action_used != null and action_used.id == "isolate_device" and not escalation_occurred:
+		return "Successful Containment"
+	if action_used != null and action_used.id == "terminate_process" and credentials_reset and not transfer_started:
 		return "Successful Containment"
 	return "Partial Containment"
 

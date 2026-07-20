@@ -6,6 +6,7 @@ const EventLogType = preload("res://scripts/event_log.gd")
 const ProcessStoreType = preload("res://scripts/process_store.gd")
 const ProcessDataType = preload("res://scripts/process_data.gd")
 const SimulationEventType = preload("res://scripts/simulation_event.gd")
+const IdentityContextType = preload("res://scripts/identity_context.gd")
 
 signal observation_changed(device_id: String, observed_state: String)
 signal unusual_route_changed(is_active: bool)
@@ -17,16 +18,18 @@ signal remote_support_started(timestamp: float)
 var clock: SimulationClockType
 var event_log: EventLogType
 var process_store: ProcessStoreType
+var identity_context: IdentityContextType
 var emitted_ids: Dictionary = {}
 var alert_started_at := -1.0
 var escalation_prevented := false
 var escalation_started_at := -1.0
 var session_started_at := -1.0
 
-func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType) -> void:
+func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, identity_value: IdentityContextType) -> void:
 	clock = clock_value
 	event_log = log_value
 	process_store = store_value
+	identity_context = identity_value
 	clock.time_changed.connect(_on_time_changed)
 
 func start() -> void:
@@ -80,6 +83,8 @@ func prevent_escalation() -> void:
 	escalation_prevented = true
 
 func _record_file_server_attempt() -> void:
+	if not identity_context.observe_suspicious_attempt():
+		return
 	_record("file_server_attempt_wsa", "suspicious_access_attempt", "Workstation A", "File Server", "Workstation A initiated an unusual authentication attempt toward File Server.", 0.72, "Attention", "workstation_a")
 	_record("file_server_attempt_fs", "suspicious_access_attempt", "Workstation A", "File Server", "Unusual authentication attempt from Workstation A was observed at the server boundary.", 0.72, "Attention", "file_server")
 	_record("alert_updated_escalation", "alert_updated", "Network Sensor", "Workstation A", "Alert confidence increased after the suspicious access attempt.", 0.72, "Attention", "workstation_a")
@@ -87,12 +92,18 @@ func _record_file_server_attempt() -> void:
 	escalation_started_at = clock.elapsed_seconds
 
 func _record_file_server_session() -> void:
+	if not identity_context.establish_suspicious_session():
+		_record("file_server_session_blocked", "authentication_blocked", "Identity Monitor", "File Server", "The File Server session could not be established because the observed credential was invalid.", 0.72, "Normal", "file_server")
+		return
 	_record("file_server_session", "unauthorized_session_established", "Workstation A", "File Server", "An unauthorized session was established at File Server.", 0.78, "Attention", "file_server")
 	observation_changed.emit("file_server", "Anomaly observed")
 	file_server_session_established.emit(clock.elapsed_seconds)
 	session_started_at = clock.elapsed_seconds
 
 func _record_abnormal_transfer() -> void:
+	if not identity_context.begin_transfer():
+		_record("abnormal_transfer_blocked", "transfer_blocked", "Identity Monitor", "File Server", "Abnormal transfer did not begin because no suspicious File Server session remained active.", 0.72, "Normal", "file_server")
+		return
 	_record("abnormal_transfer", "abnormal_file_transfer", "File Server", "External", "An abnormal file transfer began from File Server.", 0.86, "Attention", "file_server")
 	abnormal_transfer_started.emit(clock.elapsed_seconds)
 
