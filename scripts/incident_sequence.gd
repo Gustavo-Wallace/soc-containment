@@ -7,6 +7,7 @@ const ProcessStoreType = preload("res://scripts/process_store.gd")
 const ProcessDataType = preload("res://scripts/process_data.gd")
 const SimulationEventType = preload("res://scripts/simulation_event.gd")
 const IdentityContextType = preload("res://scripts/identity_context.gd")
+const AttackerStateType = preload("res://scripts/attacker_state.gd")
 
 signal observation_changed(device_id: String, observed_state: String)
 signal unusual_route_changed(is_active: bool)
@@ -19,17 +20,19 @@ var clock: SimulationClockType
 var event_log: EventLogType
 var process_store: ProcessStoreType
 var identity_context: IdentityContextType
+var attacker: AttackerStateType
 var emitted_ids: Dictionary = {}
 var alert_started_at := -1.0
 var escalation_prevented := false
 var escalation_started_at := -1.0
 var session_started_at := -1.0
 
-func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, identity_value: IdentityContextType) -> void:
+func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, identity_value: IdentityContextType, attacker_value: AttackerStateType) -> void:
 	clock = clock_value
 	event_log = log_value
 	process_store = store_value
 	identity_context = identity_value
+	attacker = attacker_value
 	clock.time_changed.connect(_on_time_changed)
 
 func start() -> void:
@@ -59,10 +62,14 @@ func _record_routine_sync() -> void:
 	_record("routine_sync", "legitimate_activity", "Workstation A", "File Server", "Routine document synchronization completed.", 0.92, "Normal", "workstation_a")
 
 func _record_unverified_process() -> void:
+	if not attacker.execute("start_process"):
+		return
 	process_store.add(ProcessDataType.new({"id": "update_bridge", "device_id": "workstation_a", "process_name": "update_bridge.exe", "user_name": "analyst.user", "publisher": "Unknown publisher", "file_path": "C:/Users/analyst.user/AppData/Local/Bridge/update_bridge.exe", "started_at": clock.elapsed_seconds, "classification": "Unverified", "has_network_activity": true, "description": "Started shortly before the recurring external connection. No prior record exists in this workstation profile."}))
 	_record("unverified_process", "process_started", "Workstation A", "", "Process update_bridge.exe started from an uncommon local path.", 0.46, "Attention", "workstation_a")
 
 func _record_outbound_pattern() -> void:
+	if not attacker.execute("external_communication"):
+		return
 	_record("outbound_pattern", "external_connection_observed", "Workstation A", "Internet", "Recurring outbound connection observed via the corporate gateway.", 0.58, "Attention", "workstation_a")
 	unusual_route_changed.emit(true)
 
@@ -83,6 +90,9 @@ func prevent_escalation() -> void:
 	escalation_prevented = true
 
 func _record_file_server_attempt() -> void:
+	attacker.execute("discover_file_server")
+	if not attacker.execute("attempt_authentication"):
+		return
 	if not identity_context.observe_suspicious_attempt():
 		return
 	_record("file_server_attempt_wsa", "suspicious_access_attempt", "Workstation A", "File Server", "Workstation A initiated an unusual authentication attempt toward File Server.", 0.72, "Attention", "workstation_a")
@@ -92,6 +102,8 @@ func _record_file_server_attempt() -> void:
 	escalation_started_at = clock.elapsed_seconds
 
 func _record_file_server_session() -> void:
+	if not attacker.execute("establish_session"):
+		return
 	if not identity_context.establish_suspicious_session():
 		_record("file_server_session_blocked", "authentication_blocked", "Identity Monitor", "File Server", "The File Server session could not be established because the observed credential was invalid.", 0.72, "Normal", "file_server")
 		return
@@ -101,6 +113,8 @@ func _record_file_server_session() -> void:
 	session_started_at = clock.elapsed_seconds
 
 func _record_abnormal_transfer() -> void:
+	if not attacker.execute("start_transfer"):
+		return
 	if not identity_context.begin_transfer():
 		_record("abnormal_transfer_blocked", "transfer_blocked", "Identity Monitor", "File Server", "Abnormal transfer did not begin because no suspicious File Server session remained active.", 0.72, "Normal", "file_server")
 		return

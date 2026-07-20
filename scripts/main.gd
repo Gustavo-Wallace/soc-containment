@@ -30,6 +30,9 @@ const IDENTITY_CONTEXT_SCRIPT := preload("res://scripts/identity_context.gd")
 const IdentityContextType = preload("res://scripts/identity_context.gd")
 const RECOVERY_CONTEXT_SCRIPT := preload("res://scripts/recovery_context.gd")
 const RecoveryContextType = preload("res://scripts/recovery_context.gd")
+const ATTACKER_STATE_SCRIPT := preload("res://scripts/attacker_state.gd")
+const AttackerStateType = preload("res://scripts/attacker_state.gd")
+const AttackerDebugPanelType = preload("res://scripts/attacker_debug_panel.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -57,9 +60,17 @@ var support_evidence_store: EvidenceStoreType
 var business_flow: BusinessFlowType
 var identity_context: IdentityContextType
 var recovery_context: RecoveryContextType
+var attacker_state: AttackerStateType
+var attacker_debug_panel: AttackerDebugPanelType
 
 func _ready() -> void:
 	_create_simulation_systems()
+	_ensure_debug_input()
+	attacker_debug_panel = AttackerDebugPanelType.new()
+	attacker_debug_panel.attacker = attacker_state
+	attacker_debug_panel.visible = false
+	attacker_debug_panel.close_requested.connect(func() -> void: attacker_debug_panel.visible = false)
+	add_child(attacker_debug_panel)
 	network_view.device_selected.connect(details_panel.show_device)
 	network_view.selection_cleared.connect(details_panel.clear_device)
 	reset_button.pressed.connect(network_view.reset_view)
@@ -112,6 +123,7 @@ func _create_simulation_systems() -> void:
 	business_flow = BUSINESS_FLOW_SCRIPT.new()
 	identity_context = IDENTITY_CONTEXT_SCRIPT.new()
 	recovery_context = RECOVERY_CONTEXT_SCRIPT.new()
+	attacker_state = ATTACKER_STATE_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
@@ -124,10 +136,12 @@ func _create_simulation_systems() -> void:
 	systems.add_child(business_flow)
 	systems.add_child(identity_context)
 	systems.add_child(recovery_context)
+	systems.add_child(attacker_state)
 	alert_system.configure(event_log)
 	identity_context.configure(clock, event_log)
 	recovery_context.configure(clock, event_log, process_store)
-	incident_sequence.configure(clock, event_log, process_store, identity_context)
+	attacker_state.configure(clock, process_store, identity_context, recovery_context)
+	incident_sequence.configure(clock, event_log, process_store, identity_context, attacker_state)
 	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store, support_evidence_store, identity_context, recovery_context)
 	recovery_context.process_restart_attempted.connect(_on_persistence_restart)
 	incident_state.configure(clock, event_log)
@@ -198,6 +212,7 @@ func _on_device_isolated(device_id: String) -> void:
 	status_dot.color = VisualStyle.MUTED_TEXT
 
 func _on_action_completed(action: ResponseActionType) -> void:
+	attacker_state.apply_defense(action.id)
 	if action.target_device_id != "workstation_a":
 		return
 	if action.id == "terminate_process" or action.id == "isolate_device":
@@ -249,6 +264,7 @@ func _on_connectivity_restored() -> void:
 	status_dot.color = VisualStyle.OPERATIONAL
 
 func _on_persistence_restart(online: bool) -> void:
+	attacker_state.execute("restart_process")
 	if online:
 		network_view.set_unusual_route(true)
 		alert_system.update_current("Reopened", 0.70, "BridgeSync Maintenance restarted update_bridge.exe; external activity resumed.")
@@ -257,6 +273,19 @@ func _on_persistence_restart(online: bool) -> void:
 		incident_state.reopen()
 	else:
 		alert_system.update_current("Contained", 0.64, "update_bridge.exe restarted locally; isolation is blocking its external communication.")
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("toggle_attacker_debug"):
+		attacker_debug_panel.visible = not attacker_debug_panel.visible
+		get_viewport().set_input_as_handled()
+
+func _ensure_debug_input() -> void:
+	if InputMap.has_action("toggle_attacker_debug"):
+		return
+	InputMap.add_action("toggle_attacker_debug")
+	var debug_key := InputEventKey.new()
+	debug_key.keycode = KEY_F3
+	InputMap.action_add_event("toggle_attacker_debug", debug_key)
 
 func _restart_incident() -> void:
 	get_tree().reload_current_scene()
