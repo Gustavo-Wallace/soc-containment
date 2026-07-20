@@ -15,6 +15,9 @@ const AlertSystemType = preload("res://scripts/alert_system.gd")
 const IncidentSequenceType = preload("res://scripts/incident_sequence.gd")
 const AlertDataType = preload("res://scripts/alert_data.gd")
 const VisualStyle = preload("res://scripts/visuals.gd")
+const RESPONSE_CONTROLLER_SCRIPT := preload("res://scripts/response_controller.gd")
+const ResponseControllerType = preload("res://scripts/response_controller.gd")
+const ResponseActionType = preload("res://scripts/response_action.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -26,12 +29,14 @@ const VisualStyle = preload("res://scripts/visuals.gd")
 @onready var speed_1_button: Button = $TopBar/Speed1Button
 @onready var speed_2_button: Button = $TopBar/Speed2Button
 @onready var alert_tray: AlertTrayType = $Content/AlertTray
+@onready var impact_label: Label = $TopBar/ImpactLabel
 
 var clock: SimulationClockType
 var event_log: EventLogType
 var process_store: ProcessStoreType
 var alert_system: AlertSystemType
 var incident_sequence: IncidentSequenceType
+var response_controller: ResponseControllerType
 
 func _ready() -> void:
 	_create_simulation_systems()
@@ -46,10 +51,16 @@ func _ready() -> void:
 	clock.speed_changed.connect(_update_speed_buttons)
 	clock.time_changed.connect(network_view.set_simulation_time)
 	alert_system.alert_created.connect(_on_alert_created)
+	alert_system.alert_updated.connect(alert_tray.update_alert)
 	alert_tray.alert_opened.connect(_open_alert)
 	incident_sequence.observation_changed.connect(network_view.set_observed_state)
 	incident_sequence.unusual_route_changed.connect(network_view.set_unusual_route)
-	details_panel.configure(event_log, process_store)
+	incident_sequence.suspicious_access_attempt.connect(_on_suspicious_access_attempt)
+	response_controller.action_completed.connect(_on_action_completed)
+	response_controller.process_terminated.connect(_on_process_terminated)
+	response_controller.device_isolated.connect(_on_device_isolated)
+	response_controller.impact_changed.connect(_on_impact_changed)
+	details_panel.configure(event_log, process_store, response_controller)
 	incident_sequence.start()
 	_update_time_mode()
 
@@ -62,13 +73,16 @@ func _create_simulation_systems() -> void:
 	process_store = PROCESS_STORE_SCRIPT.new()
 	alert_system = ALERT_SYSTEM_SCRIPT.new()
 	incident_sequence = INCIDENT_SEQUENCE_SCRIPT.new()
+	response_controller = RESPONSE_CONTROLLER_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
 	systems.add_child(alert_system)
 	systems.add_child(incident_sequence)
+	systems.add_child(response_controller)
 	alert_system.configure(event_log)
 	incident_sequence.configure(clock, event_log, process_store)
+	response_controller.configure(clock, event_log, process_store, alert_system)
 
 func _update_time(_time_value: float) -> void:
 	time_label.text = clock.formatted_time()
@@ -114,3 +128,26 @@ func _open_alert(alert: AlertDataType) -> void:
 	network_view.focus_and_select(alert.related_device_id)
 	status_label.text = "INVESTIGATION ACTIVE"
 	status_dot.color = VisualStyle.SELECTION
+
+func _on_process_terminated(_device_id: String) -> void:
+	network_view.set_unusual_route(false)
+	status_label.text = "ACTIVITY SUPPRESSED"
+	status_dot.color = VisualStyle.AMBER
+
+func _on_device_isolated(device_id: String) -> void:
+	network_view.isolate_device(device_id)
+	status_label.text = "DEVICE CONTAINED"
+	status_dot.color = VisualStyle.MUTED_TEXT
+
+func _on_action_completed(_action: ResponseActionType) -> void:
+	incident_sequence.prevent_escalation()
+
+func _on_impact_changed(impact: String) -> void:
+	impact_label.text = "IMPACT: " + impact.to_upper()
+	impact_label.tooltip_text = "Low: small local interruption." if impact == "Low" else ("Medium: finance workstation unavailable." if impact == "Medium" else "No operational impact.")
+
+func _on_suspicious_access_attempt(started_at: float) -> void:
+	network_view.start_escalation_route(started_at)
+	alert_system.update_current("Open", 0.72, "Suspicious access attempt toward File Server observed.")
+	status_label.text = "SUSPICIOUS ACCESS ATTEMPT"
+	status_dot.color = VisualStyle.AMBER

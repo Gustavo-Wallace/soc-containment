@@ -18,6 +18,10 @@ func show_alert(alert: AlertDataType) -> void:
 	emphasis = 1.0
 	queue_redraw()
 
+func update_alert(alert: AlertDataType) -> void:
+	current_alert = alert
+	queue_redraw()
+
 func _process(delta: float) -> void:
 	if emphasis > 0.0:
 		emphasis = maxf(0.0, emphasis - delta * 0.45)
@@ -36,7 +40,7 @@ func _draw() -> void:
 	draw_rect(Rect2(Vector2.ZERO, size), Color(border, 0.72 + emphasis * 0.28), false, 1.4 + emphasis)
 	draw_colored_polygon(PackedVector2Array([Vector2(18, 16), Vector2(28, 34), Vector2(8, 34)]), border)
 	var font := ThemeDB.fallback_font
-	draw_string(font, Vector2(42, 28), "ATTENTION  •  OPEN", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, border)
+	draw_string(font, Vector2(42, 28), "ATTENTION  •  %s" % current_alert.state.to_upper(), HORIZONTAL_ALIGNMENT_LEFT, -1, 10, border)
 	draw_string(font, Vector2(16, 57), current_alert.title, HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 16, VisualStyle.TEXT)
 	draw_string(font, Vector2(16, 78), "%s  •  %s  •  %d%%" % [_format_time(current_alert.timestamp), current_alert.source, int(current_alert.confidence * 100.0)], HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 11, VisualStyle.MUTED_TEXT)
 	draw_string(font, Vector2(16, 99), "Workstation A — select to investigate", HORIZONTAL_ALIGNMENT_LEFT, size.x - 32, 12, VisualStyle.TEXT)

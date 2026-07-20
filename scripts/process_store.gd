@@ -29,3 +29,9 @@ func get_for_device(device_id: String) -> Array[ProcessDataType]:
 	for process: ProcessDataType in processes_by_device[device_id]:
 		result.append(process)
 	return result
+
+func find(process_id: String, device_id: String) -> ProcessDataType:
+	for process: ProcessDataType in get_for_device(device_id):
+		if process.id == process_id:
+			return process
+	return null

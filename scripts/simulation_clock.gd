@@ -35,8 +35,8 @@ func resume() -> void:
 
 func set_speed(multiplier: float) -> void:
 	var next := 2.0 if is_equal_approx(multiplier, 2.0) else 1.0
-	if is_equal_approx(speed_multiplier, next):
-		return
+	# A speed button is also an explicit resume action. Check pause first so
+	# selecting 1× after pausing at 1× cannot be ignored as a no-op.
 	if is_paused:
 		resume()
 	if is_equal_approx(speed_multiplier, next):

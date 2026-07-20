@@ -9,6 +9,8 @@ var links: Array[PackedStringArray] = []
 var simulation_time := 0.0
 var pulse_schedule := [0, 2, 3, 1, 4]
 var unusual_route_active := false
+var escalation_started_at := -1.0
+var blocked_device_id := ""
 
 func configure(device_list: Array[DeviceDataType], link_list: Array[PackedStringArray]) -> void:
 	links = link_list
@@ -25,6 +27,16 @@ func set_unusual_route(active: bool) -> void:
 	unusual_route_active = active
 	queue_redraw()
 
+func set_blocked_device(device_id: String) -> void:
+	blocked_device_id = device_id
+	if device_id == "workstation_a":
+		unusual_route_active = false
+	queue_redraw()
+
+func start_escalation(started_at: float) -> void:
+	escalation_started_at = started_at
+	queue_redraw()
+
 func _draw() -> void:
 	if links.is_empty():
 		return
@@ -35,6 +47,8 @@ func _draw() -> void:
 		if age < 0.0 or age > 1.15:
 			continue
 		var link: PackedStringArray = links[pulse_schedule[abs(cycle) % pulse_schedule.size()]]
+		if blocked_device_id != "" and (link[0] == blocked_device_id or link[1] == blocked_device_id):
+			continue
 		var a: Vector2 = points[link[0]]
 		var b: Vector2 = points[link[1]]
 		var t := age / 1.15
@@ -43,6 +57,8 @@ func _draw() -> void:
 		draw_circle(point, 2.2, VisualStyle.PULSE)
 	if unusual_route_active:
 		_draw_unusual_route()
+	if escalation_started_at >= 0.0 and simulation_time - escalation_started_at <= 4.0:
+		_draw_escalation_route()
 
 func _draw_unusual_route() -> void:
 	var phase := fmod(simulation_time, 1.9) / 1.9
@@ -54,3 +70,14 @@ func _draw_unusual_route() -> void:
 	var point := first if phase < 0.5 else second
 	draw_circle(point, 6.0, Color(VisualStyle.AMBER, 0.16))
 	draw_circle(point, 2.5, VisualStyle.AMBER)
+
+func _draw_escalation_route() -> void:
+	var phase := fmod(simulation_time - escalation_started_at, 2.2) / 2.2
+	var workstation: Vector2 = points["workstation_a"]
+	var firewall: Vector2 = points["firewall"]
+	var file_server: Vector2 = points["file_server"]
+	var first := workstation.lerp(firewall, minf(phase * 2.0, 1.0))
+	var second := firewall.lerp(file_server, maxf(0.0, phase * 2.0 - 1.0))
+	var point := first if phase < 0.5 else second
+	draw_circle(point, 7.0, Color(VisualStyle.AMBER, 0.18))
+	draw_circle(point, 2.8, VisualStyle.AMBER)

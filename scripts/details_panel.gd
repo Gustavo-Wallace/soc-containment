@@ -6,6 +6,7 @@ const DetailsContentType = preload("res://scripts/details_content.gd")
 const EventLogType = preload("res://scripts/event_log.gd")
 const ProcessStoreType = preload("res://scripts/process_store.gd")
 const DeviceDataType = preload("res://scripts/device_data.gd")
+const ResponseControllerType = preload("res://scripts/response_controller.gd")
 
 var scroll_container: ScrollContainer
 var details_content: DetailsContentType
@@ -20,8 +21,8 @@ func _ready() -> void:
 	details_content = DETAILS_CONTENT_SCENE.instantiate()
 	scroll_container.add_child(details_content)
 
-func configure(log_value: EventLogType, store_value: ProcessStoreType) -> void:
-	details_content.configure(log_value, store_value)
+func configure(log_value: EventLogType, store_value: ProcessStoreType, response_value: ResponseControllerType) -> void:
+	details_content.configure(log_value, store_value, response_value)
 
 func show_device(data: DeviceDataType) -> void:
 	details_content.show_device(data)

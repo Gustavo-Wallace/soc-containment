@@ -141,6 +141,14 @@ func set_observed_state(device_id: String, observed_state: String) -> void:
 func set_unusual_route(active: bool) -> void:
 	activity.set_unusual_route(active)
 
+func start_escalation_route(started_at: float) -> void:
+	activity.start_escalation(started_at)
+
+func isolate_device(device_id: String) -> void:
+	set_observed_state(device_id, "Isolated")
+	connections.set_blocked_device(device_id)
+	activity.set_blocked_device(device_id)
+
 func set_simulation_time(time_value: float) -> void:
 	activity.set_simulation_time(time_value)
 

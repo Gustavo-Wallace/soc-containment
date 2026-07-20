@@ -9,11 +9,14 @@ const SimulationEventType = preload("res://scripts/simulation_event.gd")
 
 signal observation_changed(device_id: String, observed_state: String)
 signal unusual_route_changed(is_active: bool)
+signal suspicious_access_attempt(timestamp: float)
 
 var clock: SimulationClockType
 var event_log: EventLogType
 var process_store: ProcessStoreType
 var emitted_ids: Dictionary = {}
+var alert_started_at := -1.0
+var escalation_prevented := false
 
 func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType) -> void:
 	clock = clock_value
@@ -29,6 +32,8 @@ func _on_time_changed(time_value: float) -> void:
 	_emit_once("unverified_process", 7.0, time_value, _record_unverified_process)
 	_emit_once("outbound_pattern", 9.0, time_value, _record_outbound_pattern)
 	_emit_once("first_alert", 11.5, time_value, _record_alert)
+	if alert_started_at >= 0.0 and not escalation_prevented:
+		_emit_once("file_server_attempt", alert_started_at + 15.0, time_value, _record_file_server_attempt)
 
 func _emit_once(event_id: String, threshold: float, time_value: float, action: Callable) -> void:
 	if time_value < threshold or emitted_ids.has(event_id):
@@ -51,6 +56,16 @@ func _record_alert() -> void:
 	clock.set_speed(1.0)
 	_record("first_alert", "alert_created", "Network Sensor", "Workstation A", "Workstation A generated a recurring external connection outside its usual activity profile.", 0.61, "Attention", "workstation_a", {"title": "Repeated outbound pattern"})
 	observation_changed.emit("workstation_a", "Anomaly observed")
+	alert_started_at = clock.elapsed_seconds
+
+func prevent_escalation() -> void:
+	escalation_prevented = true
+
+func _record_file_server_attempt() -> void:
+	_record("file_server_attempt_wsa", "suspicious_access_attempt", "Workstation A", "File Server", "Workstation A initiated an unusual authentication attempt toward File Server.", 0.72, "Attention", "workstation_a")
+	_record("file_server_attempt_fs", "suspicious_access_attempt", "Workstation A", "File Server", "Unusual authentication attempt from Workstation A was observed at the server boundary.", 0.72, "Attention", "file_server")
+	_record("alert_updated_escalation", "alert_updated", "Network Sensor", "Workstation A", "Alert confidence increased after the suspicious access attempt.", 0.72, "Attention", "workstation_a")
+	suspicious_access_attempt.emit(clock.elapsed_seconds)
 
 func _record(id: String, event_type: String, source: String, target: String, summary: String, confidence: float, severity: String, device_id: String, extra: Dictionary = {}) -> void:
 	event_log.record(SimulationEventType.new({"id": id, "timestamp": clock.elapsed_seconds, "event_type": event_type, "source": source, "target": target, "summary": summary, "additional_data": extra, "visible_to_player": true, "confidence": confidence, "visual_severity": severity, "related_device_id": device_id}))
