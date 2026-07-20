@@ -10,6 +10,7 @@ const SimulationEventType = preload("res://scripts/simulation_event.gd")
 const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
 const EvidenceDataType = preload("res://scripts/evidence_data.gd")
 const IdentityContextType = preload("res://scripts/identity_context.gd")
+const RecoveryContextType = preload("res://scripts/recovery_context.gd")
 
 signal action_started(action: ResponseActionType)
 signal action_progressed(action: ResponseActionType, progress: float, remaining_seconds: float)
@@ -19,6 +20,7 @@ signal process_terminated(device_id: String)
 signal device_isolated(device_id: String)
 signal support_alert_closed(device_id: String)
 signal credentials_reset
+signal connectivity_restored
 
 var clock: SimulationClockType
 var event_log: EventLogType
@@ -30,8 +32,9 @@ var operational_impact := "None"
 var evidence_store: EvidenceStoreType
 var support_evidence_store: EvidenceStoreType
 var identity_context: IdentityContextType
+var recovery_context: RecoveryContextType
 
-func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, alerts_value: AlertSystemType, evidence_value: EvidenceStoreType, support_evidence_value: EvidenceStoreType, identity_value: IdentityContextType) -> void:
+func configure(clock_value: SimulationClockType, log_value: EventLogType, store_value: ProcessStoreType, alerts_value: AlertSystemType, evidence_value: EvidenceStoreType, support_evidence_value: EvidenceStoreType, identity_value: IdentityContextType, recovery_value: RecoveryContextType) -> void:
 	clock = clock_value
 	event_log = log_value
 	process_store = store_value
@@ -39,6 +42,7 @@ func configure(clock_value: SimulationClockType, log_value: EventLogType, store_
 	evidence_store = evidence_value
 	support_evidence_store = support_evidence_value
 	identity_context = identity_value
+	recovery_context = recovery_value
 	clock.time_changed.connect(_on_time_changed)
 
 func actions_for_process(process_id: String, device_id: String, observed_state: String) -> Array[ResponseActionType]:
@@ -63,6 +67,17 @@ func actions_for_process(process_id: String, device_id: String, observed_state: 
 		actions.append(ResponseActionType.new({"id": "trace_connection", "title": "Trace Connection", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 5.0, "impact": "None", "benefit": "Correlates the recurring connection with its observed route.", "limitation": "Does not block traffic.", "consequence": "No operational impact."}))
 	if identity_context.suspicious_attempt_state != "None" and not identity_context.credentials_reset:
 		actions.append(ResponseActionType.new({"id": "reset_credentials", "title": "Reset Credentials", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 4.0, "impact": "Low", "benefit": "Invalidates the observed credential and revokes associated sessions.", "limitation": "Does not remove the process or software from the workstation.", "consequence": "finance.analyst's legitimate local session will be interrupted."}))
+	if recovery_context.contained_at >= 0.0:
+		if recovery_context.persistence_state == "Hidden":
+			actions.append(ResponseActionType.new({"id": "validate_persistence", "title": "Validate Persistence", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 5.0, "impact": "None", "benefit": "Reveals startup persistence and its ability to restart the process.", "limitation": "Does not remove the persistence.", "consequence": "Residual restart risk remains until removal."}))
+		elif recovery_context.persistence_state == "Detected":
+			actions.append(ResponseActionType.new({"id": "remove_persistence", "title": "Remove Persistence", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 3.0, "impact": "None", "benefit": "Removes BridgeSync Maintenance and prevents future restarts.", "limitation": "Does not restore network connectivity.", "consequence": "The startup mechanism is eradicated."}))
+		if recovery_context.isolated:
+			var restore_reason := recovery_context.can_restore(identity_context)
+			if restore_reason == "":
+				actions.append(ResponseActionType.new({"id": "restore_connectivity", "title": "Restore Connectivity", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 4.0, "impact": "None", "benefit": "Restores legitimate connectivity and Finance Document Sync.", "limitation": "Requires no active process, identity session, or persistence.", "consequence": "Workstation A returns to normal network operation."}))
+			else:
+				actions.append(ResponseActionType.new({"id": "restore_blocked", "title": "Restore Connectivity (Blocked)", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 0.1, "impact": "None", "benefit": "Unavailable until recovery requirements are met.", "limitation": restore_reason, "consequence": "Connectivity remains isolated."}))
 	if observed_state == "Isolated" or process.classification == "Terminated":
 		return actions
 	actions.append(ResponseActionType.new({"id": "terminate_process", "title": "Terminate Process", "target_device_id": device_id, "target_process_id": process_id, "duration_seconds": 3.0, "impact": "Low", "benefit": "Stops the process and its associated connection.", "limitation": "Execution origin and possible additional mechanisms remain unknown.", "consequence": "The workstation remains online under monitoring."}))
@@ -119,6 +134,19 @@ func _complete_active_action() -> void:
 		_set_impact("Low")
 		_record("credentials_reset", "finance.analyst credentials were reset. update_bridge.exe remains active on Workstation A.", completed.target_device_id, "Attention")
 		credentials_reset.emit()
+	elif completed.id == "validate_persistence":
+		recovery_context.validate()
+		evidence_store.add(EvidenceDataType.new({"id": "unauthorized_startup_task", "title": "Unauthorized startup task", "source": "Persistence Validation", "timestamp": clock.elapsed_seconds, "device_id": completed.target_device_id, "confidence": "High", "summary": "BridgeSync Maintenance can restart update_bridge.exe.", "facts": PackedStringArray(["Startup task: BridgeSync Maintenance", "Associated process: update_bridge.exe", "Origin: unknown", "Restart capability confirmed"])}))
+		_record("persistence_validated", "Persistence validation completed; BridgeSync Maintenance was detected.", completed.target_device_id, "Attention")
+	elif completed.id == "remove_persistence":
+		recovery_context.remove()
+		_record("persistence_removed", "BridgeSync Maintenance was removed.", completed.target_device_id, "Normal")
+	elif completed.id == "restore_connectivity":
+		recovery_context.restore()
+		_record("connectivity_restored", "Workstation A connectivity and Finance Document Sync were restored.", completed.target_device_id, "Normal")
+		connectivity_restored.emit()
+	elif completed.id == "restore_blocked":
+		_record("recovery_blocked", "Connectivity restoration remains blocked: %s" % completed.limitation, completed.target_device_id, "Attention")
 	elif completed.id == "terminate_process":
 		var process := process_store.find(completed.target_process_id, completed.target_device_id)
 		if process != null:

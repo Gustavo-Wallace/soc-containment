@@ -8,12 +8,15 @@ const ProcessStoreType = preload("res://scripts/process_store.gd")
 const DeviceDataType = preload("res://scripts/device_data.gd")
 const ResponseControllerType = preload("res://scripts/response_controller.gd")
 const IncidentStateType = preload("res://scripts/incident_state.gd")
+const RecoveryContextType = preload("res://scripts/recovery_context.gd")
 
 var scroll_container: ScrollContainer
 var details_content: DetailsContentType
 var incident_state: IncidentStateType
 var finalize_button: Button
 var finalize_hint: Label
+var recovery_context: RecoveryContextType
+var awaiting_residual_confirmation := false
 
 func _ready() -> void:
 	scroll_container = ScrollContainer.new()
@@ -29,7 +32,7 @@ func _ready() -> void:
 	finalize_button.visible = false
 	finalize_button.position = Vector2(42, size.y - 52)
 	finalize_button.size = Vector2(212, 34)
-	finalize_button.pressed.connect(func() -> void: incident_state.finalize_incident())
+	finalize_button.pressed.connect(_request_finalize)
 	add_child(finalize_button)
 	finalize_hint = Label.new()
 	finalize_hint.text = "Activity interrupted. Residual risk remains; review before finalizing."
@@ -40,10 +43,19 @@ func _ready() -> void:
 	finalize_hint.add_theme_font_size_override("font_size", 10)
 	add_child(finalize_hint)
 
-func configure(log_value: EventLogType, store_value: ProcessStoreType, response_value: ResponseControllerType, state_value: IncidentStateType) -> void:
+func configure(log_value: EventLogType, store_value: ProcessStoreType, response_value: ResponseControllerType, state_value: IncidentStateType, recovery_value: RecoveryContextType) -> void:
 	details_content.configure(log_value, store_value, response_value)
 	incident_state = state_value
+	recovery_context = recovery_value
 	incident_state.finalize_available.connect(func() -> void: finalize_button.visible = true; finalize_hint.visible = true)
+
+func _request_finalize() -> void:
+	if recovery_context != null and recovery_context.persistence_state == "Hidden" and not awaiting_residual_confirmation:
+		awaiting_residual_confirmation = true
+		finalize_hint.text = "Persistence has not been validated. The incident can be closed, but residual access may remain unresolved."
+		finalize_button.text = "CONFIRM RESIDUAL RISK"
+		return
+	incident_state.finalize_incident()
 
 func show_device(data: DeviceDataType) -> void:
 	details_content.show_device(data)

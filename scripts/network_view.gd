@@ -155,6 +155,11 @@ func isolate_device(device_id: String) -> void:
 	connections.set_blocked_device(device_id)
 	activity.set_blocked_device(device_id)
 
+func restore_device_connectivity(device_id: String) -> void:
+	set_observed_state(device_id, "Normal")
+	connections.set_blocked_device("")
+	activity.set_blocked_device("")
+
 func set_simulation_time(time_value: float) -> void:
 	activity.set_simulation_time(time_value)
 

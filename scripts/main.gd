@@ -28,6 +28,8 @@ const BUSINESS_FLOW_SCRIPT := preload("res://scripts/business_flow.gd")
 const BusinessFlowType = preload("res://scripts/business_flow.gd")
 const IDENTITY_CONTEXT_SCRIPT := preload("res://scripts/identity_context.gd")
 const IdentityContextType = preload("res://scripts/identity_context.gd")
+const RECOVERY_CONTEXT_SCRIPT := preload("res://scripts/recovery_context.gd")
+const RecoveryContextType = preload("res://scripts/recovery_context.gd")
 
 @onready var network_view: NetworkViewType = $Content/NetworkView
 @onready var details_panel: DetailsPanelType = $DetailsPanel
@@ -54,6 +56,7 @@ var evidence_store: EvidenceStoreType
 var support_evidence_store: EvidenceStoreType
 var business_flow: BusinessFlowType
 var identity_context: IdentityContextType
+var recovery_context: RecoveryContextType
 
 func _ready() -> void:
 	_create_simulation_systems()
@@ -85,10 +88,11 @@ func _ready() -> void:
 	response_controller.device_isolated.connect(_on_device_isolated)
 	response_controller.support_alert_closed.connect(_on_support_alert_closed)
 	response_controller.credentials_reset.connect(_on_credentials_reset)
+	response_controller.connectivity_restored.connect(_on_connectivity_restored)
 	response_controller.impact_changed.connect(_on_impact_changed)
 	incident_state.report_requested.connect(_on_report_requested)
 	report_overlay.restart_requested.connect(_restart_incident)
-	details_panel.configure(event_log, process_store, response_controller, incident_state)
+	details_panel.configure(event_log, process_store, response_controller, incident_state, recovery_context)
 	incident_sequence.start()
 	_update_time_mode()
 
@@ -107,6 +111,7 @@ func _create_simulation_systems() -> void:
 	support_evidence_store = EVIDENCE_STORE_SCRIPT.new()
 	business_flow = BUSINESS_FLOW_SCRIPT.new()
 	identity_context = IDENTITY_CONTEXT_SCRIPT.new()
+	recovery_context = RECOVERY_CONTEXT_SCRIPT.new()
 	systems.add_child(clock)
 	systems.add_child(event_log)
 	systems.add_child(process_store)
@@ -118,10 +123,13 @@ func _create_simulation_systems() -> void:
 	systems.add_child(support_evidence_store)
 	systems.add_child(business_flow)
 	systems.add_child(identity_context)
+	systems.add_child(recovery_context)
 	alert_system.configure(event_log)
 	identity_context.configure(clock, event_log)
+	recovery_context.configure(clock, event_log, process_store)
 	incident_sequence.configure(clock, event_log, process_store, identity_context)
-	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store, support_evidence_store, identity_context)
+	response_controller.configure(clock, event_log, process_store, alert_system, evidence_store, support_evidence_store, identity_context, recovery_context)
+	recovery_context.process_restart_attempted.connect(_on_persistence_restart)
 	incident_state.configure(clock, event_log)
 	business_flow.configure(clock, event_log)
 
@@ -178,12 +186,14 @@ func _open_alert(alert: AlertDataType) -> void:
 
 func _on_process_terminated(_device_id: String) -> void:
 	network_view.set_unusual_route(false)
+	recovery_context.mark_contained(false)
 	status_label.text = "ACTIVITY SUPPRESSED"
 	status_dot.color = VisualStyle.AMBER
 
 func _on_device_isolated(device_id: String) -> void:
 	network_view.isolate_device(device_id)
 	business_flow.set_isolated(true)
+	recovery_context.mark_contained(true)
 	status_label.text = "DEVICE CONTAINED"
 	status_dot.color = VisualStyle.MUTED_TEXT
 
@@ -223,7 +233,7 @@ func _on_abnormal_transfer(_started_at: float) -> void:
 
 func _on_report_requested(outcome: String) -> void:
 	clock.pause()
-	report_overlay.show_report(outcome, event_log, incident_state, evidence_store, business_flow, alert_system, identity_context)
+	report_overlay.show_report(outcome, event_log, incident_state, evidence_store, business_flow, alert_system, identity_context, recovery_context)
 
 func _on_support_alert_closed(device_id: String) -> void:
 	network_view.set_observed_state(device_id, "Normal")
@@ -231,6 +241,22 @@ func _on_support_alert_closed(device_id: String) -> void:
 func _on_credentials_reset() -> void:
 	network_view.set_observed_state("file_server", "Normal")
 	incident_state.register_identity_reset()
+
+func _on_connectivity_restored() -> void:
+	network_view.restore_device_connectivity("workstation_a")
+	business_flow.set_isolated(false)
+	status_label.text = "CONNECTIVITY RESTORED"
+	status_dot.color = VisualStyle.OPERATIONAL
+
+func _on_persistence_restart(online: bool) -> void:
+	if online:
+		network_view.set_unusual_route(true)
+		alert_system.update_current("Reopened", 0.70, "BridgeSync Maintenance restarted update_bridge.exe; external activity resumed.")
+		status_label.text = "PROCESS RESTARTED"
+		status_dot.color = VisualStyle.AMBER
+		incident_state.reopen()
+	else:
+		alert_system.update_current("Contained", 0.64, "update_bridge.exe restarted locally; isolation is blocking its external communication.")
 
 func _restart_incident() -> void:
 	get_tree().reload_current_scene()

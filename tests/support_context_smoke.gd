@@ -9,6 +9,7 @@ const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
 const ProcessDataType = preload("res://scripts/process_data.gd")
 const SimulationEventType = preload("res://scripts/simulation_event.gd")
 const IdentityContextType = preload("res://scripts/identity_context.gd")
+const RecoveryContextType = preload("res://scripts/recovery_context.gd")
 
 func _init() -> void:
 	_test_unsupported_closure()
@@ -24,9 +25,11 @@ func _make_context() -> Array:
 	var incident_evidence := EvidenceStoreType.new()
 	var support_evidence := EvidenceStoreType.new()
 	var identity := IdentityContextType.new()
+	var recovery := RecoveryContextType.new()
 	alerts.configure(log)
 	identity.configure(clock, log)
-	controller.configure(clock, log, processes, alerts, incident_evidence, support_evidence, identity)
+	recovery.configure(clock, log, processes)
+	controller.configure(clock, log, processes, alerts, incident_evidence, support_evidence, identity, recovery)
 	log.record(SimulationEventType.new({"id": "support_alert", "timestamp": 16.0, "event_type": "alert_created", "source": "Access Monitor", "target": "Workstation B", "summary": "Workstation B accepted a remote session outside its usual local activity pattern.", "additional_data": {"title": "Unusual remote session", "priority": "Review", "context_kind": "contextual"}, "visible_to_player": true, "confidence": 0.35, "visual_severity": "Review", "related_device_id": "workstation_b"}))
 	processes.add(ProcessDataType.new({"id": "relay_support", "device_id": "workstation_b", "process_name": "relay_support.exe", "user_name": "support.agent", "publisher": "Northstar Support Systems", "file_path": "C:/Program Files/Northstar Support/relay_support.exe", "started_at": 16.0, "classification": "Observed", "has_network_activity": true, "description": "Authorized support."}))
 	return [clock, alerts, controller, support_evidence]

@@ -59,6 +59,10 @@ func mark_failed() -> void:
 	failure_report_at = clock.elapsed_seconds + 5.0
 	_set_state("EXPOSED")
 
+func reopen() -> void:
+	finalize_ready_at = -1.0
+	_set_state("ESCALATED")
+
 func can_finalize() -> bool:
 	return current_state == "POST_CONTAINMENT" and finalize_ready_at >= 0.0 and clock.elapsed_seconds >= finalize_ready_at
 

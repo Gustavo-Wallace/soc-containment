@@ -8,6 +8,7 @@ const EvidenceStoreType = preload("res://scripts/evidence_store.gd")
 const BusinessFlowType = preload("res://scripts/business_flow.gd")
 const AlertSystemType = preload("res://scripts/alert_system.gd")
 const IdentityContextType = preload("res://scripts/identity_context.gd")
+const RecoveryContextType = preload("res://scripts/recovery_context.gd")
 
 signal restart_requested
 
@@ -19,16 +20,17 @@ var evidence_store: EvidenceStoreType
 var business_flow: BusinessFlowType
 var alert_system: AlertSystemType
 var identity_context: IdentityContextType
+var recovery_context: RecoveryContextType
 
 func _ready() -> void:
 	restart_button = Button.new()
 	restart_button.text = "RESTART INCIDENT"
-	restart_button.position = Vector2(832, 615)
+	restart_button.position = Vector2(832, 632)
 	restart_button.size = Vector2(170, 34)
 	restart_button.pressed.connect(func() -> void: restart_requested.emit())
 	add_child(restart_button)
 
-func show_report(value: String, log_value: EventLogType, state_value: IncidentStateType, evidence_value: EvidenceStoreType, business_value: BusinessFlowType, alerts_value: AlertSystemType, identity_value: IdentityContextType) -> void:
+func show_report(value: String, log_value: EventLogType, state_value: IncidentStateType, evidence_value: EvidenceStoreType, business_value: BusinessFlowType, alerts_value: AlertSystemType, identity_value: IdentityContextType, recovery_value: RecoveryContextType) -> void:
 	outcome = value
 	event_log = log_value
 	incident_state = state_value
@@ -36,6 +38,7 @@ func show_report(value: String, log_value: EventLogType, state_value: IncidentSt
 	business_flow = business_value
 	alert_system = alerts_value
 	identity_context = identity_value
+	recovery_context = recovery_value
 	visible = true
 	queue_redraw()
 
@@ -72,6 +75,8 @@ func _draw() -> void:
 	draw_string(font, Vector2(700, 561), "Downtime: %.1fs" % business_flow.downtime_seconds, HORIZONTAL_ALIGNMENT_LEFT, 280, 10, VisualStyle.MUTED_TEXT)
 	draw_string(font, Vector2(700, 579), "ALERT TRIAGE", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, VisualStyle.MUTED_TEXT)
 	draw_multiline_string(font, Vector2(700, 591), _alert_triage(), HORIZONTAL_ALIGNMENT_LEFT, 280, 10, 2, VisualStyle.TEXT)
+	draw_string(font, Vector2(700, 610), "ERADICATION AND RECOVERY", HORIZONTAL_ALIGNMENT_LEFT, -1, 10, VisualStyle.MUTED_TEXT)
+	draw_string(font, Vector2(700, 629), _recovery_quality(), HORIZONTAL_ALIGNMENT_LEFT, 280, 10, VisualStyle.TEXT)
 
 func _outcome_summary() -> String:
 	if outcome == "Successful Containment":
@@ -131,6 +136,13 @@ func _identity_response() -> String:
 	var session_text := "File Server session: %s." % identity_context.suspicious_session_state
 	var exposure_text := " Possible exposure occurred before revocation." if identity_context.exposure_before_revocation else ""
 	return "finance.analyst from Workstation A targeted File Server. %s %s%s" % [reset_text, session_text, exposure_text]
+
+func _recovery_quality() -> String:
+	if recovery_context == null or recovery_context.persistence_state == "Hidden":
+		return "Unverified — persistence was not validated; residual access may remain."
+	if recovery_context.restored:
+		return "Restored — persistence removed and legitimate connectivity resumed."
+	return "Contained — persistence %s; recovery is incomplete." % recovery_context.persistence_state.to_lower()
 
 func _format_time(value: float) -> String:
 	var seconds := int(value)

@@ -2,6 +2,8 @@
 
 O jogo também inclui alertas contextuais independentes: uma sessão de suporte remoto autorizada pode ser revisada e classificada como benigna sem alterar o caso principal.
 
+Após a contenção, a recuperação permite validar e remover uma persistência fictícia, avaliar risco residual e restaurar conectividade com segurança.
+
 SOC: Containment é um jogo de estratégia, investigação e gerenciamento de incidentes de segurança cibernética. A rede corporativa é o campo principal: o jogador observa sua estrutura, entende a função de cada ativo e toma decisões para preservar a operação.
 
 ## Como funciona
