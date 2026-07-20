@@ -4,5 +4,5 @@
 
 [node name="DetailsPanel" type="Control"]
 custom_minimum_size = Vector2(296, 0)
-mouse_filter = 2
+mouse_filter = 0
 script = ExtResource("1")

@@ -96,8 +96,14 @@ func _select_device(data: DeviceData) -> void:
 
 func _apply_selection(data: DeviceData) -> void:
 	if selected_id != "" and device_nodes.has(selected_id):
-		(device_nodes[selected_id] as DeviceNode).set_selected(false)
+		var previous: DeviceNode = device_nodes[selected_id]
+		previous.set_selected(false)
+		if previous.data.observed_state == "Under inspection":
+			previous.data.observed_state = "Anomaly observed"
+			previous.queue_redraw()
 	selected_id = data.id
+	if data.observed_state == "Anomaly observed":
+		data.observed_state = "Under inspection"
 	(device_nodes[selected_id] as DeviceNode).set_selected(true)
 	connections.set_selected(selected_id)
 	device_selected.emit(data)
@@ -116,3 +122,21 @@ func reset_view() -> void:
 	camera_scale = 1.0
 	camera.scale = Vector2.ONE
 	camera.position = Vector2(0, 0)
+
+func set_observed_state(device_id: String, observed_state: String) -> void:
+	if not device_nodes.has(device_id):
+		return
+	var node: DeviceNode = device_nodes[device_id]
+	node.data.observed_state = observed_state
+	node.queue_redraw()
+
+func set_unusual_route(active: bool) -> void:
+	activity.set_unusual_route(active)
+
+func focus_and_select(device_id: String) -> void:
+	if not device_nodes.has(device_id):
+		return
+	var node: DeviceNode = device_nodes[device_id]
+	camera.position = size * 0.5 - node.data.position * camera_scale
+	_clamp_camera()
+	selection_controller.select(node.data)

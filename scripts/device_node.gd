@@ -35,16 +35,22 @@ func _draw() -> void:
 	if data == null:
 		return
 	var center := size * 0.5
+	var is_anomalous := data.observed_state == "Anomaly observed" or data.observed_state == "Under inspection"
 	var accent := Visuals.SELECTION if is_selected else (Visuals.OPERATIONAL if is_hovered else Visuals.CONNECTION)
 	var outline_width := 2.5 if is_selected else (1.8 if is_hovered else 1.2)
 	if is_selected:
 		draw_circle(center, 47.0, Color(Visuals.SELECTION, 0.10))
 		draw_arc(center, 47.0, 0.0, TAU, 36, Visuals.SELECTION, 1.3)
+	if is_anomalous:
+		draw_arc(center, 40.0, 0.25, TAU - 0.25, 30, Visuals.AMBER, 1.8)
+		draw_colored_polygon(PackedVector2Array([Vector2(15, 17), Vector2(24, 17), Vector2(19.5, 25)]), Visuals.AMBER)
 	_draw_silhouette(center, accent, outline_width)
 	# device name and category are intentionally part of the reusable visual
 	var font := ThemeDB.fallback_font
 	draw_string(font, Vector2(8, 91), data.display_name, HORIZONTAL_ALIGNMENT_CENTER, size.x - 16, 14, Visuals.TEXT)
 	draw_string(font, Vector2(8, 107), data.category.to_upper(), HORIZONTAL_ALIGNMENT_CENTER, size.x - 16, 10, Visuals.MUTED_TEXT)
+	if is_anomalous:
+		draw_string(font, Vector2(8, 14), "OBSERVED" if data.observed_state == "Anomaly observed" else "INSPECTING", HORIZONTAL_ALIGNMENT_CENTER, size.x - 16, 9, Visuals.AMBER)
 	var active_alpha := 0.45 + 0.45 * sin(activity_phase * TAU / 1.8)
 	draw_circle(Vector2(size.x - 20, 20), 4.0, Color(Visuals.OPERATIONAL, active_alpha))
 

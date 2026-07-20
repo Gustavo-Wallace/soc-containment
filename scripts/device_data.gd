@@ -12,6 +12,7 @@ var importance: String
 var position: Vector2
 var kind: String
 var operational_state: String = "Operational"
+var observed_state: String = "Normal"
 
 func _init(values: Dictionary) -> void:
 	for key: String in values:

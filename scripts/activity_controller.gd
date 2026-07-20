@@ -5,6 +5,7 @@ var points: Dictionary = {}
 var links: Array[PackedStringArray] = []
 var elapsed := 0.0
 var pulse_schedule := [0, 2, 3, 1, 4]
+var unusual_route_active := false
 
 func configure(device_list: Array[DeviceData], link_list: Array[PackedStringArray]) -> void:
 	links = link_list
@@ -13,6 +14,10 @@ func configure(device_list: Array[DeviceData], link_list: Array[PackedStringArra
 
 func _process(delta: float) -> void:
 	elapsed += delta
+	queue_redraw()
+
+func set_unusual_route(active: bool) -> void:
+	unusual_route_active = active
 	queue_redraw()
 
 func _draw() -> void:
@@ -31,3 +36,16 @@ func _draw() -> void:
 		var point := a.lerp(b, t)
 		draw_circle(point, 5.0, Color(Visuals.PULSE, 0.16))
 		draw_circle(point, 2.2, Visuals.PULSE)
+	if unusual_route_active:
+		_draw_unusual_route()
+
+func _draw_unusual_route() -> void:
+	var phase := fmod(elapsed, 1.9) / 1.9
+	var workstation: Vector2 = points["workstation_a"]
+	var firewall: Vector2 = points["firewall"]
+	var internet: Vector2 = points["internet"]
+	var first := workstation.lerp(firewall, minf(phase * 2.0, 1.0))
+	var second := firewall.lerp(internet, maxf(0.0, phase * 2.0 - 1.0))
+	var point := first if phase < 0.5 else second
+	draw_circle(point, 6.0, Color(Visuals.AMBER, 0.16))
+	draw_circle(point, 2.5, Visuals.AMBER)
